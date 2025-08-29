@@ -25,3 +25,17 @@ type APIResponse struct {
 type Choice struct {
 	Message Message `json:"message"`
 }
+
+// OllamaAPIResponse Define the structure for the expected API response from Ollama.
+type OllamaAPIResponse struct {
+	Model     string `json:"model"`
+	CreatedAt string `json:"created_at"`
+	Message   struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"message"`
+	Done bool `json:"done"`
+}
+
+//To calculate how fast the response is generated in tokens per second
+// (token/s), divide eval_count / eval_duration * 10^9.

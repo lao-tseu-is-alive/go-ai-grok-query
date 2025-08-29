@@ -29,3 +29,18 @@ func GetXaiApiKeyFromEnv() (string, error) {
 		return "", fmt.Errorf("error geeting api key from : %s", "XAI_API_KEY")
 	}
 }
+
+// GetGeminiApiKeyFromEnv returns string with Gemini API key from an env variable GEMINI_API_KEY
+func GetGeminiApiKeyFromEnv() (string, error) {
+	apiKey := ""
+	val, exist := os.LookupEnv("GEMINI_API_KEY")
+	if exist {
+		apiKey = val
+		return fmt.Sprintf("%s", apiKey), nil
+	} else {
+		fmt.Println("💥💥 ERROR: GEMINI_API_KEY environment variable not set.")
+		fmt.Println("Please set it before running the program:")
+		fmt.Println("export GEMINI_API_KEY='your_api_key_here'")
+		return "", fmt.Errorf("error getting api key from: %s", "GEMINI_API_KEY")
+	}
+}

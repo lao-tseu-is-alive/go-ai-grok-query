@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lao-tseu-is-alive/go-ai-grok-query/pkg/config"
+	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 )
 
 type XaiProvider struct {
