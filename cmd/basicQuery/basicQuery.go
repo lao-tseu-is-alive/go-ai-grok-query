@@ -25,55 +25,54 @@ func main() {
 		os.Exit(1)
 	}
 	prompt := os.Args[1]
-
 	/*
-			// Create provider (Ollama)
-			provider, err := llm.NewProvider(llm.ProviderConfig{
-				Kind:  llm.ProviderOllama,
-				Model: "deepseek-r1:latest",
-				// BaseURL defaults to http://localhost:11434; set explicitly if needed:
-				// BaseURL: "http://localhost:11434",
-			})
-			checkErr(err, "creating Ollama provider")
-
-			// Create Gemini provider
-			provider, err := llm.NewProvider(llm.ProviderConfig{
-				Kind:   llm.ProviderGemini,
-				Model:  "gemini-2.5-flash", // pick the desired Gemini model
-				APIKey: os.Getenv("GEMINI_API_KEY"),
-				// BaseURL left default: https://generativelanguage.googleapis.com
-			})
-			checkErr(err, "creating Gemini provider")
-		key, err := config.GetXaiApiKeyFromEnv()
-		if err != nil {
-			panic(fmt.Sprintf("need to get the api key : %v", err))
-		}
-		// Create Xai Groq provider
+		// Create provider (Ollama)
 		provider, err := llm.NewProvider(llm.ProviderConfig{
-			Kind:   llm.ProviderXAI,
-			Model:  "grok-3-mini",
-			APIKey: key,
+			Kind:  llm.ProviderOllama,
+			Model: "qwen3:latest",
 		})
-		checkErr(err, "creating XAI provider")
-
-
-			provider, err := llm.NewProvider(llm.ProviderConfig{
-				Kind:   llm.ProviderOpenAI,
-				Model:  "gpt-4.1-mini", // choose an available OpenAI chat model
-				APIKey: os.Getenv("OPENAI_API_KEY"),
-				// BaseURL defaults to https://api.openai.com/v1
-				// ExtraHeaders can be added if needed
-			})
-			checkErr(err, "creating OpenAI provider")
+		checkErr(err, "creating Ollama provider")
 	*/
+	// Create Gemini provider
 	provider, err := llm.NewProvider(llm.ProviderConfig{
-		Kind:   llm.ProviderOpenRouter,
-		Model:  "deepseek/deepseek-chat-v3.1:free", // choose an available OpenAI chat model
-		APIKey: os.Getenv("OPEN_ROUTER_API_KEY"),
-		// BaseURL defaults to https://api.openai.com/v1
-		// ExtraHeaders can be added if needed
+		Kind:   llm.ProviderGemini,
+		Model:  "gemini-2.5-flash", // pick the desired Gemini model
+		APIKey: os.Getenv("GEMINI_API_KEY"),
+		// BaseURL left default: https://generativelanguage.googleapis.com
 	})
-	checkErr(err, "creating OpenAI provider")
+	checkErr(err, "creating Gemini provider")
+	/*
+			key, err := config.GetXaiApiKeyFromEnv()
+			if err != nil {
+				panic(fmt.Sprintf("need to get the api key : %v", err))
+			}
+			// Create Xai Groq provider
+			provider, err := llm.NewProvider(llm.ProviderConfig{
+				Kind:   llm.ProviderXAI,
+				Model:  "grok-3-mini",
+				APIKey: key,
+			})
+			checkErr(err, "creating XAI provider")
+
+
+				provider, err := llm.NewProvider(llm.ProviderConfig{
+					Kind:   llm.ProviderOpenAI,
+					Model:  "gpt-4.1-mini", // choose an available OpenAI chat model
+					APIKey: os.Getenv("OPENAI_API_KEY"),
+					// BaseURL defaults to https://api.openai.com/v1
+					// ExtraHeaders can be added if needed
+				})
+				checkErr(err, "creating OpenAI provider")
+
+		provider, err := llm.NewProvider(llm.ProviderConfig{
+			Kind:   llm.ProviderOpenRouter,
+			Model:  "deepseek/deepseek-chat-v3.1:free", // choose an available OpenAI chat model
+			APIKey: os.Getenv("OPEN_ROUTER_API_KEY"),
+			// BaseURL defaults to https://api.openai.com/v1
+			// ExtraHeaders can be added if needed
+		})
+		checkErr(err, "creating OpenAI provider")
+	*/
 
 	req := &llm.LLMRequest{
 		Messages: []llm.LLMMessage{

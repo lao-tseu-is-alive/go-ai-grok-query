@@ -1,11 +1,9 @@
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -19,6 +17,32 @@ type OllamaProvider struct {
 	BaseURL string
 	Model   string
 	Client  *http.Client
+}
+
+// Ollama-specific request payload structure
+type ollamaRequest struct {
+	Model    string           `json:"model"`
+	Messages []map[string]any `json:"messages"`
+	Stream   bool             `json:"stream"`
+	Tools    []Tool           `json:"tools,omitempty"`
+	Options  map[string]any   `json:"options,omitempty"`
+}
+
+// Ollama-specific response payload structure
+type ollamaResponse struct {
+	Model   string `json:"model"`
+	Message struct {
+		Role      string `json:"role"`
+		Content   string `json:"content"`
+		ToolCalls []struct {
+			Function struct {
+				Name      string          `json:"name"`
+				Arguments json.RawMessage `json:"arguments"`
+			} `json:"function"`
+		} `json:"tool_calls,omitempty"`
+	} `json:"message"`
+	Done  bool   `json:"done"`
+	Error string `json:"error,omitempty"`
 }
 
 func newOllamaAdapter(cfg ProviderConfig) (Provider, error) {
@@ -37,77 +61,48 @@ func newOllamaAdapter(cfg ProviderConfig) (Provider, error) {
 }
 
 func (o *OllamaProvider) Query(ctx context.Context, req *LLMRequest) (*LLMResponse, error) {
-	payload := map[string]any{
-		"model":    firstNonEmpty(req.Model, o.Model),
-		"messages": toOpenAIChatMessages(req.Messages),
-		"stream":   false,
+	// 1. Build the Ollama-specific request payload
+	payload := ollamaRequest{
+		Model:    firstNonEmpty(req.Model, o.Model),
+		Messages: toOpenAIChatMessages(req.Messages),
+		Stream:   false,
 	}
 	if req.Temperature > 0 {
-		payload["options"] = map[string]any{"temperature": req.Temperature}
+		payload.Options = map[string]any{"temperature": req.Temperature}
 	}
 	if len(req.Tools) > 0 {
-		// Ollama mirrors OpenAI-style tools schema
-		payload["tools"] = req.Tools
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("ollama: marshal payload: %w", err)
+		payload.Tools = req.Tools
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", o.BaseURL+ollamaChatPath, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("ollama: new request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	// 2. Prepare headers and call the generic helper
+	headers := http.Header{"Content-Type": []string{"application/json"}}
+	url := o.BaseURL + ollamaChatPath
 
-	resp, err := o.Client.Do(httpReq)
+	wire, rawResp, err := httpRequest[ollamaRequest, ollamaResponse](ctx, o.Client, url, headers, payload)
 	if err != nil {
-		return nil, fmt.Errorf("ollama: do request: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ollama: read body: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("ollama: http %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	// Newer Ollama returns OpenAI-like single object for non-stream
-	var wire struct {
-		Model   string `json:"model"`
-		Message struct {
-			Role      string `json:"role"`
-			Content   string `json:"content"`
-			ToolCalls []struct {
-				ID       string `json:"id"`
-				Type     string `json:"type"`
-				Function struct {
-					Name      string          `json:"name"`
-					Arguments json.RawMessage `json:"arguments"`
-				} `json:"function"`
-			} `json:"tool_calls,omitempty"`
-		} `json:"message"`
-		Done  bool   `json:"done"`
-		Error string `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal(respBody, &wire); err != nil {
-		return nil, fmt.Errorf("ollama: unmarshal: %w", err)
+		return nil, fmt.Errorf("ollama: http error: %w body: %s", err, string(rawResp))
 	}
 	if wire.Error != "" {
-		return nil, fmt.Errorf("ollama: error: %s", wire.Error)
+		return nil, fmt.Errorf("ollama: provider error: %s", wire.Error)
 	}
 
-	out := &LLMResponse{Text: wire.Message.Content, Raw: json.RawMessage(respBody)}
+	// 3. Map the Ollama response to our standard LLMResponse
+	out := &LLMResponse{
+		Text: wire.Message.Content,
+		Raw:  json.RawMessage(rawResp),
+	}
 	for _, tc := range wire.Message.ToolCalls {
 		out.ToolCalls = append(out.ToolCalls, ToolCall{
-			ID:        tc.ID,
+			// Note: Ollama doesn't provide a tool call ID, so we might need
+			// to generate one if downstream logic depends on it.
 			Name:      tc.Function.Name,
 			Arguments: tc.Function.Arguments,
 		})
 	}
+
 	return out, nil
 }
+
 func (o *OllamaProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
 	// TODO: implement streaming with chunked JSON lines; Ollama streams sequence of objects.
 	return nil, fmt.Errorf("ollama: streaming not implemented")

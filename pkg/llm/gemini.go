@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -14,6 +13,30 @@ type GeminiProvider struct {
 	APIKey  string
 	Model   string
 	Client  *http.Client
+}
+
+// Gemini-specific request payload structure
+type geminiRequest struct {
+	Contents          []map[string]any `json:"contents"`
+	SystemInstruction *map[string]any  `json:"systemInstruction,omitempty"`
+	GenerationConfig  map[string]any   `json:"generationConfig,omitempty"`
+}
+
+// Gemini-specific response payload structure
+type geminiResponse struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text,omitempty"`
+			} `json:"parts"`
+		} `json:"content"`
+		FinishReason string `json:"finishReason,omitempty"`
+	} `json:"candidates"`
+	Usage struct {
+		PromptTokenCount     int `json:"promptTokenCount"`
+		CandidatesTokenCount int `json:"candidatesTokenCount"`
+		TotalTokenCount      int `json:"totalTokenCount"`
+	} `json:"usageMetadata"`
 }
 
 func newGeminiAdapter(cfg ProviderConfig) (Provider, error) {
@@ -36,99 +59,59 @@ func newGeminiAdapter(cfg ProviderConfig) (Provider, error) {
 }
 
 func (g *GeminiProvider) Query(ctx context.Context, req *LLMRequest) (*LLMResponse, error) {
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent", g.BaseURL, firstNonEmpty(req.Model, g.Model))
-
-	contents := toGeminiContents(req.Messages)
-	payload := map[string]any{
-		"contents": contents,
-		// Map temperature, topP, maxOutputTokens where provided
-		"generationConfig": map[string]any{},
+	// 1. Build the Gemini-specific request payload
+	payload := geminiRequest{
+		Contents:         toGeminiContents(req.Messages),
+		GenerationConfig: make(map[string]any),
 	}
-	gen := payload["generationConfig"].(map[string]any)
 	if req.Temperature > 0 {
-		gen["temperature"] = req.Temperature
+		payload.GenerationConfig["temperature"] = req.Temperature
 	}
 	if req.TopP > 0 {
-		gen["topP"] = req.TopP
+		payload.GenerationConfig["topP"] = req.TopP
 	}
 	if req.MaxTokens > 0 {
-		gen["maxOutputTokens"] = req.MaxTokens
+		payload.GenerationConfig["maxOutputTokens"] = req.MaxTokens
 	}
-	// If a system message exists, send as systemInstruction (Gemini-native)
 	if sys := firstSystemMessage(req.Messages); sys != "" {
-		payload["systemInstruction"] = map[string]any{
+		payload.SystemInstruction = &map[string]any{
 			"role":  "system",
 			"parts": []map[string]any{{"text": sys}},
 		}
 	}
 
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("gemini: marshal payload: %w", err)
+	// 2. Prepare headers and call the generic helper
+	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent", g.BaseURL, firstNonEmpty(req.Model, g.Model))
+	headers := http.Header{
+		"Content-Type":   []string{"application/json"},
+		"x-goog-api-key": []string{g.APIKey},
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
+	wire, rawResp, err := httpRequest[geminiRequest, geminiResponse](ctx, g.Client, url, headers, payload)
 	if err != nil {
-		return nil, fmt.Errorf("gemini: new request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-goog-api-key", g.APIKey)
-
-	resp, err := g.Client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("gemini: do request: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("gemini: read body: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("gemini: http %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("gemini: http error: %w body: %s", err, string(rawResp))
 	}
 
-	var wire struct {
-		Candidates []struct {
-			Content struct {
-				Role  string `json:"role"`
-				Parts []struct {
-					Text string `json:"text,omitempty"`
-				} `json:"parts"`
-			} `json:"content"`
-			FinishReason string `json:"finishReason,omitempty"`
-		} `json:"candidates"`
-		Usage struct {
-			PromptTokenCount     int `json:"promptTokenCount"`
-			CandidatesTokenCount int `json:"candidatesTokenCount"`
-			TotalTokenCount      int `json:"totalTokenCount"`
-		} `json:"usageMetadata"`
+	// 3. Map the Gemini response to our standard LLMResponse
+	out := &LLMResponse{
+		Raw: json.RawMessage(rawResp),
+		Usage: &Usage{
+			PromptTokens:     wire.Usage.PromptTokenCount,
+			CompletionTokens: wire.Usage.CandidatesTokenCount,
+			TotalTokens:      wire.Usage.TotalTokenCount,
+		},
 	}
-	if err := json.Unmarshal(respBody, &wire); err != nil {
-		return nil, fmt.Errorf("gemini: unmarshal: %w", err)
-	}
-
-	out := &LLMResponse{Raw: json.RawMessage(respBody)}
 	if len(wire.Candidates) > 0 {
 		first := wire.Candidates[0]
 		var buf bytes.Buffer
 		for _, p := range first.Content.Parts {
-			if p.Text != "" {
-				if buf.Len() > 0 {
-					buf.WriteByte('\n')
-				}
-				buf.WriteString(p.Text)
-			}
+			buf.WriteString(p.Text) // Simplified text extraction
 		}
 		out.Text = buf.String()
 		out.FinishReason = first.FinishReason
 	}
-	out.Usage = &Usage{
-		PromptTokens:     wire.Usage.PromptTokenCount,
-		CompletionTokens: wire.Usage.CandidatesTokenCount,
-		TotalTokens:      wire.Usage.TotalTokenCount,
-	}
-	return out, nil
 
+	return out, nil
 }
 
 func (g *GeminiProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
