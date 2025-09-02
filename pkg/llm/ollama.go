@@ -7,89 +7,112 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 )
 
 // INFO: https://github.com/ollama/ollama/blob/main/docs/api.md
 
+const OllamaUrl = "http://localhost:11434/api/chat"
+const ollamaChatPath = "/api/chat"
+
 // OllamaProvider implements the Provider interface for local Ollama models.
 type OllamaProvider struct {
-	BaseUrl string
+	BaseURL string
 	Model   string
+	Client  *http.Client
 }
 
-const OllamaUrl = "http://localhost:11434/api/chat"
-
-func newOllamaProvider(model string) (Provider, error) {
+func newOllamaAdapter(cfg ProviderConfig) (Provider, error) {
+	base := cfg.BaseURL
+	if base == "" {
+		base = "http://localhost:11434"
+	}
+	if cfg.Model == "" {
+		return nil, fmt.Errorf("ollama: missing model")
+	}
 	return &OllamaProvider{
-		BaseUrl: OllamaUrl,
-		Model:   model,
+		BaseURL: base,
+		Model:   cfg.Model,
+		Client:  &http.Client{Timeout: 0},
 	}, nil
 }
 
-// Query prepares and sends the HTTP request to the Ollama API.
-func (o *OllamaProvider) Query(systemPrompt, UserPrompt string) (string, error) {
-	requestPayload := APIRequest{
-		Model: o.Model,
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: systemPrompt,
-			},
-			{
-				Role:    "user",
-				Content: UserPrompt,
-			},
-		},
-		Stream: false,
+func (o *OllamaProvider) Query(ctx context.Context, req *LLMRequest) (*LLMResponse, error) {
+	payload := map[string]any{
+		"model":    firstNonEmpty(req.Model, o.Model),
+		"messages": toOpenAIChatMessages(req.Messages),
+		"stream":   false,
+	}
+	if req.Temperature > 0 {
+		payload["options"] = map[string]any{"temperature": req.Temperature}
+	}
+	if len(req.Tools) > 0 {
+		// Ollama mirrors OpenAI-style tools schema
+		payload["tools"] = req.Tools
+	}
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("ollama: marshal payload: %w", err)
 	}
 
-	jsonData, err := json.Marshal(requestPayload)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", o.BaseURL+ollamaChatPath, bytes.NewBuffer(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("error marshaling request data: %w", err)
+		return nil, fmt.Errorf("ollama: new request: %w", err)
 	}
+	httpReq.Header.Set("Content-Type", "application/json")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", o.BaseUrl, bytes.NewBuffer(jsonData))
+	resp, err := o.Client.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("error creating HTTP request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request to API: %w", err)
+		return nil, fmt.Errorf("ollama: do request: %w", err)
 	}
 	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("error reading response body: %w", err)
+		return nil, fmt.Errorf("ollama: read body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("ollama: http %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API returned non-200 status code %d: %s", resp.StatusCode, string(body))
+	// Newer Ollama returns OpenAI-like single object for non-stream
+	var wire struct {
+		Model   string `json:"model"`
+		Message struct {
+			Role      string `json:"role"`
+			Content   string `json:"content"`
+			ToolCalls []struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string          `json:"name"`
+					Arguments json.RawMessage `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls,omitempty"`
+		} `json:"message"`
+		Done  bool   `json:"done"`
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(respBody, &wire); err != nil {
+		return nil, fmt.Errorf("ollama: unmarshal: %w", err)
+	}
+	if wire.Error != "" {
+		return nil, fmt.Errorf("ollama: error: %s", wire.Error)
 	}
 
-	var ollamaResponse OllamaAPIResponse
-	if err := json.Unmarshal(body, &ollamaResponse); err != nil {
-		return "", fmt.Errorf("error unmarshaling response JSON: %w", err)
+	out := &LLMResponse{Text: wire.Message.Content, Raw: json.RawMessage(respBody)}
+	for _, tc := range wire.Message.ToolCalls {
+		out.ToolCalls = append(out.ToolCalls, ToolCall{
+			ID:        tc.ID,
+			Name:      tc.Function.Name,
+			Arguments: tc.Function.Arguments,
+		})
 	}
-
-	if len(ollamaResponse.Message.Content) > 0 {
-		return ollamaResponse.Message.Content, nil
-	}
-
-	fmt.Printf("### something went wrong, here is the received body:\n %#v\n###", body)
-
-	return "No response content received.", nil
+	return out, nil
 }
-
-func (o *OllamaProvider) ListModels() {
-	//TODO implement me
-	panic("implement me")
+func (o *OllamaProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
+	// TODO: implement streaming with chunked JSON lines; Ollama streams sequence of objects.
+	return nil, fmt.Errorf("ollama: streaming not implemented")
+}
+func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	// Optional: GET /api/tags to list models
+	return nil, fmt.Errorf("ollama: ListModels not implemented")
 }
