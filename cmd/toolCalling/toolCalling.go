@@ -10,13 +10,28 @@ import (
 	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/llm"
 )
 
-// A simple local function that emulates a backend tool.
+// Tool implementation
 func getCurrentWeather(args json.RawMessage) (string, error) {
+	// OpenAI tool_calls function.arguments is a JSON-encoded string.
+	// Step 1: decode into a Go string
+	var argStr string
+	if err := json.Unmarshal(args, &argStr); err != nil {
+		// If the provider ever returns raw object (some servers do), fall back to object unmarshal
+		var tmp map[string]any
+		if err2 := json.Unmarshal(args, &tmp); err2 != nil {
+			return "", fmt.Errorf("decode arguments: as string: %v; as object: %v", err, err2)
+		}
+		// Re-encode normalized object as string and continue
+		b, _ := json.Marshal(tmp)
+		argStr = string(b)
+	}
+
+	// Step 2: unmarshal the inner JSON into the expected struct
 	var p struct {
 		Location string `json:"location"`
-		Format   string `json:"format,omitempty"` // "celsius" | "fahrenheit"
+		Format   string `json:"format,omitempty"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
+	if err := json.Unmarshal([]byte(argStr), &p); err != nil {
 		return "", fmt.Errorf("parse args: %w", err)
 	}
 	if p.Location == "" {
@@ -25,7 +40,8 @@ func getCurrentWeather(args json.RawMessage) (string, error) {
 	if p.Format == "" {
 		p.Format = "celsius"
 	}
-	// Stub a fake reading
+
+	// Produce a compact JSON result
 	result := map[string]any{
 		"location": p.Location,
 		"temp":     22.5,
@@ -43,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 1) Create GPT provider (OpenAI)
+	// Provider
 	provider, err := llm.NewProvider(llm.ProviderConfig{
 		Kind:   llm.ProviderOpenAI,
 		Model:  "gpt-4.1-mini",
@@ -51,7 +67,7 @@ func main() {
 	})
 	check(err, "creating OpenAI provider")
 
-	// 2) Declare tools (OpenAI tools schema)
+	// Tool schema
 	weatherTool := llm.Tool{
 		Type: "function",
 		Function: llm.ToolSpec{
@@ -74,18 +90,16 @@ func main() {
 		},
 	}
 
-	// 3) Initialize conversation
-	messages := []llm.LLMMessage{
-		{Role: llm.RoleSystem, Content: "You are a helpful weather assistant. Use tools when needed and ask for clarification if inputs are ambiguous."},
-		{Role: llm.RoleUser, Content: "What's the weather right now in San Francisco, CA?"},
-	}
+	// Turn 1: system + user
+	sys := llm.LLMMessage{Role: llm.RoleSystem, Content: "You are a helpful weather assistant. Use tools when needed and ask for clarification if inputs are ambiguous."}
+	usr := llm.LLMMessage{Role: llm.RoleUser, Content: "What's the weather right now in San Francisco, CA?"}
+	messages := []llm.LLMMessage{sys, usr}
 
-	// 4) First call with tools, expecting a tool call back
 	req := &llm.LLMRequest{
 		Model:      "gpt-4.1-mini",
 		Messages:   messages,
 		Tools:      []llm.Tool{weatherTool},
-		ToolChoice: "auto", // let the model decide
+		ToolChoice: "auto",
 		Stream:     false,
 	}
 
@@ -95,62 +109,68 @@ func main() {
 	fmt.Println("Calling GPT for tool decision...")
 	resp, err := provider.Query(ctx, req)
 	check(err, "first query")
-	// If the model returns text AND tool calls, the text can be treated as thoughts/explanation; the tool call drives execution. [16]
 
-	// 5) Handle a single tool call (extend for multiple as needed)
 	if len(resp.ToolCalls) == 0 {
-		// No tool call: print the text answer and exit
 		fmt.Println("\nAssistant:", resp.Text)
 		return
 	}
-	// 5a) Re-insert the assistant message that requested the tools.
-	// Many APIs accept tool calls in assistant additional fields even if content is empty.
-	assistantToolMsg := llm.LLMMessage{
-		Role:    llm.RoleAssistant,
-		Content: resp.Text, // optional; can be empty if model returned only tool calls
+
+	// Build exact OpenAI-shaped messages for Turn 2
+	// 1) copy prior messages
+	messagesOpenAI := []map[string]any{
+		{"role": "system", "content": sys.Content},
+		{"role": "user", "content": usr.Content},
 	}
-	// Attach tool_calls in ProviderExtras for adapter to forward, OR if your adapter
-	// already stores tool calls only in response, you can keep content and just proceed.
-	// For OpenAI-compatible schemas, you must serialize tool_calls into the assistant message.
-	// If your adapter doesn't support that directly, you can skip setting tool_calls here
-	// and rely on the prior response; BUT you must still add an assistant turn to maintain order.
-	messages = append(messages, assistantToolMsg)
 
-	// 5b) Append one tool result per tool_call id, in order
-	for _, call := range resp.ToolCalls {
-		fmt.Printf("Model requested tool call: %s(%s)\n", call.Name, string(call.Arguments))
+	// 2) assistant with tool_calls (from resp.ToolCalls)
+	toolCallsWire := make([]map[string]any, 0, len(resp.ToolCalls))
+	for _, tc := range resp.ToolCalls {
+		toolCallsWire = append(toolCallsWire, map[string]any{
+			"id":   tc.ID,
+			"type": "function",
+			"function": map[string]any{
+				"name":      tc.Name,
+				"arguments": string(tc.Arguments),
+			},
+		})
+	}
+	messagesOpenAI = append(messagesOpenAI, map[string]any{
+		"role":       "assistant",
+		"content":    resp.Text, // may be empty
+		"tool_calls": toolCallsWire,
+	})
 
-		// Execute the tool based on call.Name
-		var result string
-		var err error
-		switch call.Name {
-		case "get_current_weather":
-			result, err = getCurrentWeather(call.Arguments)
-		// add more tools here...
-		default:
-			err = fmt.Errorf("unknown tool: %s", call.Name)
-		}
+	// 3) tool results (one per tool_call), matching tool_call_id in the same order
+	for _, tc := range resp.ToolCalls {
+		fmt.Printf("Model requested tool call: %s(%s)\n", tc.Name, string(tc.Arguments))
+		result, err := getCurrentWeather(tc.Arguments)
 		if err != nil {
-			// decide how to surface tool error; often returned as tool content too
 			result = fmt.Sprintf(`{"error":%q}`, err.Error())
 		}
-
-		// Append tool result message with matching tool_call_id for each call
-		messages = append(messages, llm.LLMMessage{
-			Role:       llm.RoleTool,
-			Name:       call.Name,
-			ToolCallID: call.ID,
-			Content:    result, // should be a JSON string
+		fmt.Printf("result of calling : %s(%s)  : %#v\n", tc.Name, string(tc.Arguments), result)
+		messagesOpenAI = append(messagesOpenAI, map[string]any{
+			"role":         "tool",
+			"tool_call_id": tc.ID,
+			"name":         tc.Name,
+			"content":      result,
 		})
 	}
 
-	// 7) Second call with the tool result included to get the final natural language answer
+	// After appending tool messages, add a brief user instruction prompting the final answer.
+	// This helps models that otherwise might wait for a natural language cue.
+	messagesOpenAI = append(messagesOpenAI, map[string]any{
+		"role":    "user",
+		"content": "Please use the tool result above to answer my original question clearly.",
+	})
+
+	// Turn 2 request: ensure payload contains a non-empty "messages"
 	req2 := &llm.LLMRequest{
-		Model:    "gpt-4.1-mini",
-		Messages: messages,
-		Stream:   false,
-		// Tools can be included again to allow follow-up calls; or omitted if not needed.
-		Tools:      []llm.Tool{weatherTool},
+		Model:  "gpt-4.1-mini",
+		Stream: false,
+		Tools:  []llm.Tool{weatherTool},
+		ProviderExtras: map[string]any{
+			"messages_override": messagesOpenAI,
+		},
 		ToolChoice: "auto",
 	}
 

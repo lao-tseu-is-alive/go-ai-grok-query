@@ -46,6 +46,16 @@ func (o *OpenAIProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 		"messages": toOpenAIChatMessages(req.Messages),
 		"stream":   false,
 	}
+	// Build messages: use override if provided (for assistant.tool_calls + tool adjacency)
+	if req.ProviderExtras != nil {
+		if mos, ok := req.ProviderExtras["messages_override"].([]map[string]any); ok && len(mos) > 0 {
+			payload["messages"] = mos
+		} else {
+			payload["messages"] = toOpenAIChatMessages(req.Messages)
+		}
+	} else {
+		payload["messages"] = toOpenAIChatMessages(req.Messages)
+	}
 
 	// Optional controls
 	if req.Temperature != 0 {
