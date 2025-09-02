@@ -59,13 +59,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Provider
 	provider, err := llm.NewProvider(llm.ProviderConfig{
 		Kind:   llm.ProviderOpenAI,
 		Model:  "gpt-4.1-mini",
 		APIKey: apiKey,
 	})
-	check(err, "creating OpenAI provider")
+	llm.Check(err, "creating OpenAI provider")
 
 	// Tool schema
 	weatherTool := llm.Tool{
@@ -90,101 +89,55 @@ func main() {
 		},
 	}
 
-	// Turn 1: system + user
-	sys := llm.LLMMessage{Role: llm.RoleSystem, Content: "You are a helpful weather assistant. Use tools when needed and ask for clarification if inputs are ambiguous."}
-	usr := llm.LLMMessage{Role: llm.RoleUser, Content: "What's the weather right now in San Francisco, CA?"}
-	messages := []llm.LLMMessage{sys, usr}
-
-	req := &llm.LLMRequest{
-		Model:      "gpt-4.1-mini",
-		Messages:   messages,
-		Tools:      []llm.Tool{weatherTool},
-		ToolChoice: "auto",
-		Stream:     false,
-	}
+	// 1. Start a new conversation
+	convo := llm.NewConversation("You are a helpful weather assistant.")
+	convo.AddUserMessage("What's the weather right now in San Francisco, CA?")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// 2. First API Call
 	fmt.Println("Calling GPT for tool decision...")
-	resp, err := provider.Query(ctx, req)
-	check(err, "first query")
-
-	if len(resp.ToolCalls) == 0 {
-		fmt.Println("\nAssistant:", resp.Text)
-		return
-	}
-
-	// Build exact OpenAI-shaped messages for Turn 2
-	// 1) copy prior messages
-	messagesOpenAI := []map[string]any{
-		{"role": "system", "content": sys.Content},
-		{"role": "user", "content": usr.Content},
-	}
-
-	// 2) assistant with tool_calls (from resp.ToolCalls)
-	toolCallsWire := make([]map[string]any, 0, len(resp.ToolCalls))
-	for _, tc := range resp.ToolCalls {
-		toolCallsWire = append(toolCallsWire, map[string]any{
-			"id":   tc.ID,
-			"type": "function",
-			"function": map[string]any{
-				"name":      tc.Name,
-				"arguments": string(tc.Arguments),
-			},
-		})
-	}
-	messagesOpenAI = append(messagesOpenAI, map[string]any{
-		"role":       "assistant",
-		"content":    resp.Text, // may be empty
-		"tool_calls": toolCallsWire,
-	})
-
-	// 3) tool results (one per tool_call), matching tool_call_id in the same order
-	for _, tc := range resp.ToolCalls {
-		fmt.Printf("Model requested tool call: %s(%s)\n", tc.Name, string(tc.Arguments))
-		result, err := getCurrentWeather(tc.Arguments)
-		if err != nil {
-			result = fmt.Sprintf(`{"error":%q}`, err.Error())
-		}
-		fmt.Printf("result of calling : %s(%s)  : %#v\n", tc.Name, string(tc.Arguments), result)
-		messagesOpenAI = append(messagesOpenAI, map[string]any{
-			"role":         "tool",
-			"tool_call_id": tc.ID,
-			"name":         tc.Name,
-			"content":      result,
-		})
-	}
-
-	// After appending tool messages, add a brief user instruction prompting the final answer.
-	// This helps models that otherwise might wait for a natural language cue.
-	messagesOpenAI = append(messagesOpenAI, map[string]any{
-		"role":    "user",
-		"content": "Please use the tool result above to answer my original question clearly.",
-	})
-
-	// Turn 2 request: ensure payload contains a non-empty "messages"
-	req2 := &llm.LLMRequest{
-		Model:  "gpt-4.1-mini",
-		Stream: false,
-		Tools:  []llm.Tool{weatherTool},
-		ProviderExtras: map[string]any{
-			"messages_override": messagesOpenAI,
-		},
+	req := &llm.LLMRequest{
+		Model:      "gpt-4.1-mini",
+		Messages:   convo.Messages,
+		Tools:      []llm.Tool{weatherTool},
 		ToolChoice: "auto",
 	}
+	resp, err := provider.Query(ctx, req)
+	llm.Check(err, "first query")
 
-	fmt.Println("Calling GPT for final answer...")
-	resp2, err := provider.Query(ctx, req2)
-	check(err, "second query")
+	// Add the assistant's turn to the conversation
+	convo.AddAssistantResponse(resp)
 
-	fmt.Println("\nAssistant:")
-	fmt.Println(resp2.Text)
-}
+	// 3. Check for tool calls and execute them
+	if len(resp.ToolCalls) > 0 {
+		for _, tc := range resp.ToolCalls {
+			fmt.Printf("Model requested tool call: %s(%s)\n", tc.Name, string(tc.Arguments))
+			result, err := getCurrentWeather(tc.Arguments)
+			if err != nil {
+				result = fmt.Sprintf(`{"error":%q}`, err.Error())
+			}
+			fmt.Printf("result of calling : %s(%s)  : %#v\n", tc.Name, string(tc.Arguments), result)
+			// Add the tool result back to the conversation
+			convo.AddToolResultMessage(tc.ID, result)
+		}
 
-func check(err error, msg string) {
-	if err != nil {
-		fmt.Printf("Error %s: %v\n", msg, err)
-		os.Exit(1)
+		// 4. Second API Call (with the tool result in the history)
+		fmt.Println("Calling GPT for final answer...")
+		req2 := &llm.LLMRequest{
+			Model:    "gpt-4.1-mini",
+			Messages: convo.Messages,
+			Tools:    []llm.Tool{weatherTool},
+		}
+		resp2, err := provider.Query(ctx, req2)
+		llm.Check(err, "second query")
+
+		fmt.Println("\nAssistant:")
+		fmt.Println(resp2.Text)
+	} else {
+		// No tool call was made, just print the response
+		fmt.Println("\nAssistant:")
+		fmt.Println(resp.Text)
 	}
 }

@@ -15,8 +15,9 @@ type LLMMessage struct {
 	Role    Role   `json:"role"`
 	Content string `json:"content"`
 	// Optional: name (assistant tool name), tool call id when returning tool output
-	Name       string `json:"name,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 }
 
 type ToolSpec struct {
