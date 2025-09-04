@@ -5,9 +5,9 @@ import (
 	"fmt"
 )
 
-// toOpenAIChatMessages converts internal messages to OpenAI API format.
+// ToOpenAIChatMessages converts internal messages to OpenAI API format.
 // It handles optional fields like tool_calls and ensures compatibility.
-func toOpenAIChatMessages(msgs []LLMMessage) []map[string]any {
+func ToOpenAIChatMessages(msgs []LLMMessage) []map[string]any {
 	out := make([]map[string]any, 0, len(msgs))
 	for _, msg := range msgs {
 		item := map[string]any{

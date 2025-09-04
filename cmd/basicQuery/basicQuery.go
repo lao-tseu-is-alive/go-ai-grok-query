@@ -1,95 +1,120 @@
-// main.go
+// basicQuery.go
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
 	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/llm"
 )
 
-const defaultRole = "You are a helpful bash shell assistant."
+// Constants for common defaults
+const (
+	defaultRole        = "You are a helpful bash shell assistant."
+	defaultTemperature = 0.2
+	defaultTimeout     = 30 * time.Second
+)
 
-func checkErr(err error, msg string) {
-	if err != nil {
-		fmt.Printf("## 💥💥 Error %s: %v\n", msg, err)
-		os.Exit(1)
+// providerConfig holds config values for each provider
+type providerConfig struct {
+	Kind    llm.ProviderKind
+	Model   string
+	APIKey  string
+	BaseURL string
+}
+
+// getProviderConfigs returns a map of available provider configs for easy selection
+func getProviderConfigs() map[string]providerConfig {
+	return map[string]providerConfig{
+		"ollama": {
+			Kind:  llm.ProviderOllama,
+			Model: "qwen3:latest",
+			// Ollama uses local setup, no API key needed
+		},
+		"gemini": {
+			Kind:   llm.ProviderGemini,
+			Model:  "gemini-2.5-flash",
+			APIKey: os.Getenv("GEMINI_API_KEY"),
+		},
+		"xai": {
+			Kind:   llm.ProviderXAI,
+			Model:  "grok-3-mini",
+			APIKey: os.Getenv("XAI_API_KEY"),
+		},
+		"openai": {
+			Kind:   llm.ProviderOpenAI,
+			Model:  "gpt-4o-mini", // Fixed model name for OpenAI compatibility
+			APIKey: os.Getenv("OPENAI_API_KEY"),
+		},
+		"openrouter": {
+			Kind:   llm.ProviderOpenRouter,
+			Model:  "deepseek/deepseek-chat-v3.1:free",
+			APIKey: os.Getenv("OPEN_ROUTER_API_KEY"),
+		},
 	}
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go 'your prompt'")
+	// Define command-line flags for provider selection and prompt
+	providerFlag := flag.String("provider", "openai", "Provider to use (ollama, gemini, xai, openai, openrouter)")
+	promptFlag := flag.String("prompt", "", "The prompt to send to the LLM")
+	flag.Parse()
+
+	if *promptFlag == "" {
+		fmt.Println("Usage: go run basicQuery.go -provider=<provider> -prompt='your prompt'")
+		fmt.Println("Available providers: ollama, gemini, xai, openai, openrouter")
 		os.Exit(1)
 	}
-	prompt := os.Args[1]
-	/*
-		// Create provider (Ollama)
-		provider, err := llm.NewProvider(llm.ProviderConfig{
-			Kind:  llm.ProviderOllama,
-			Model: "qwen3:latest",
-		})
-		checkErr(err, "creating Ollama provider")
-	*/
-	// Create Gemini provider
+
+	// Fetch provider config
+	configs := getProviderConfigs()
+	cfg, exists := configs[*providerFlag]
+	if !exists {
+		fmt.Printf("## 💥💥 Error: Unknown provider '%s'. Available: ollama, gemini, xai, openai, openrouter\n", *providerFlag)
+		os.Exit(1)
+	}
+
+	// Validate API key if required (Ollama is exempt)
+	if cfg.Kind != llm.ProviderOllama && cfg.APIKey == "" {
+		fmt.Printf("## 💥💥 Error: API key for provider '%s' not found in environment variables\n", *providerFlag)
+		os.Exit(1)
+	}
+
+	// Create provider
 	provider, err := llm.NewProvider(llm.ProviderConfig{
-		Kind:   llm.ProviderGemini,
-		Model:  "gemini-2.5-flash", // pick the desired Gemini model
-		APIKey: os.Getenv("GEMINI_API_KEY"),
-		// BaseURL left default: https://generativelanguage.googleapis.com
+		Kind:    cfg.Kind,
+		Model:   cfg.Model,
+		APIKey:  cfg.APIKey,
+		BaseURL: cfg.BaseURL,
+		// ExtraHeaders can be added here if needed per provider
 	})
-	checkErr(err, "creating Gemini provider")
-	/*
-			key, err := config.GetXaiApiKeyFromEnv()
-			if err != nil {
-				panic(fmt.Sprintf("need to get the api key : %v", err))
-			}
-			// Create Xai Groq provider
-			provider, err := llm.NewProvider(llm.ProviderConfig{
-				Kind:   llm.ProviderXAI,
-				Model:  "grok-3-mini",
-				APIKey: key,
-			})
-			checkErr(err, "creating XAI provider")
+	if err != nil {
+		log.Fatalf("## 💥💥 Error creating provider %s: %v", *providerFlag, err)
+	}
 
-
-				provider, err := llm.NewProvider(llm.ProviderConfig{
-					Kind:   llm.ProviderOpenAI,
-					Model:  "gpt-4.1-mini", // choose an available OpenAI chat model
-					APIKey: os.Getenv("OPENAI_API_KEY"),
-					// BaseURL defaults to https://api.openai.com/v1
-					// ExtraHeaders can be added if needed
-				})
-				checkErr(err, "creating OpenAI provider")
-
-		provider, err := llm.NewProvider(llm.ProviderConfig{
-			Kind:   llm.ProviderOpenRouter,
-			Model:  "deepseek/deepseek-chat-v3.1:free", // choose an available OpenAI chat model
-			APIKey: os.Getenv("OPEN_ROUTER_API_KEY"),
-			// BaseURL defaults to https://api.openai.com/v1
-			// ExtraHeaders can be added if needed
-		})
-		checkErr(err, "creating OpenAI provider")
-	*/
-
+	// Build the request
 	req := &llm.LLMRequest{
 		Messages: []llm.LLMMessage{
 			{Role: llm.RoleSystem, Content: defaultRole},
-			{Role: llm.RoleUser, Content: prompt},
+			{Role: llm.RoleUser, Content: *promptFlag},
 		},
-		Temperature: 0.2,
+		Temperature: defaultTemperature,
 		Stream:      false,
 	}
 
-	// Apply a timeout to the request
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Apply timeout and query
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	fmt.Println("Sending prompt to LLM...")
+	fmt.Printf("Sending prompt to %s LLM...\n", *providerFlag)
 	resp, err := provider.Query(ctx, req)
-	checkErr(err, "querying LLM")
+	if err != nil {
+		log.Fatalf("## 💥💥 Error querying LLM: %v", err)
+	}
 
 	fmt.Println("\nLLM Response:")
 	fmt.Println(resp.Text)

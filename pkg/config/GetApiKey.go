@@ -1,46 +1,67 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"log/slog" // Use slog for optional, structured logging
 	"os"
 	"unicode/utf8"
 )
 
-const (
-	minApiKeyLength = 80
-)
+const minKeyLength = 35
 
-// GetXaiApiKeyFromEnv returns string with XAI API key from an env variable XAI_API_KEY
-func GetXaiApiKeyFromEnv() (string, error) {
-	apiKey := ""
-	val, exist := os.LookupEnv("XAI_API_KEY")
-	if exist {
-		apiKey = val
-		if utf8.RuneCountInString(apiKey) < minApiKeyLength {
-			fmt.Printf("💥💥 ERROR: XAI_API_KEY should contain at least %d characters (got %d).",
-				minApiKeyLength, utf8.RuneCountInString(val))
-		}
-		return fmt.Sprintf("%s", apiKey), nil
-	} else {
-		fmt.Println("💥💥 ERROR: XAI_API_KEY environment variable not set.")
-		fmt.Println("If you don't have one go to : https://console.x.ai/team/default/api-keys")
-		fmt.Println("Please set it before running the program:")
-		fmt.Println("export XAI_API_KEY='your_api_key_here'")
-		return "", fmt.Errorf("error geeting api key from : %s", "XAI_API_KEY")
+// GetXaiApiKey returns the XAI API key from the environment.
+func GetXaiApiKey() (string, error) {
+	apiKey, exists := os.LookupEnv("XAI_API_KEY")
+	if !exists {
+		slog.Error("XAI API key not set", "env_var", "XAI_API_KEY", "help", "set via export XAI_API_KEY or https://console.x.ai")
+		return "", errors.New("XAI API key not set")
 	}
+	if utf8.RuneCountInString(apiKey) < minKeyLength {
+		slog.Error("XAI API key too short", "required", minKeyLength, "got", utf8.RuneCountInString(apiKey))
+		return "", fmt.Errorf("XAI API key must be at least %d characters (got %d)", minKeyLength, utf8.RuneCountInString(apiKey))
+	}
+	return apiKey, nil
 }
 
-// GetGeminiApiKeyFromEnv returns string with Gemini API key from an env variable GEMINI_API_KEY
-func GetGeminiApiKeyFromEnv() (string, error) {
-	apiKey := ""
-	val, exist := os.LookupEnv("GEMINI_API_KEY")
-	if exist {
-		apiKey = val
-		return fmt.Sprintf("%s", apiKey), nil
-	} else {
-		fmt.Println("💥💥 ERROR: GEMINI_API_KEY environment variable not set.")
-		fmt.Println("Please set it before running the program:")
-		fmt.Println("export GEMINI_API_KEY='your_api_key_here'")
-		return "", fmt.Errorf("error getting api key from: %s", "GEMINI_API_KEY")
+// GetGeminiApiKey returns the Gemini API key from the environment.
+func GetGeminiApiKey() (string, error) {
+	apiKey, exists := os.LookupEnv("GEMINI_API_KEY")
+	if !exists {
+		slog.Error("Gemini API key not set", "env_var", "GEMINI_API_KEY", "help", "set via export GEMINI_API_KEY")
+		return "", errors.New("gemini API key not set")
 	}
+	if utf8.RuneCountInString(apiKey) < minKeyLength {
+		slog.Error("Gemini API key too short", "required", minKeyLength, "got", utf8.RuneCountInString(apiKey))
+		return "", fmt.Errorf("gemini API key must be at least %d characters (got %d)", minKeyLength, utf8.RuneCountInString(apiKey))
+	}
+	return apiKey, nil
+}
+
+// GetOpenAIApiKey returns the Gemini API key from the environment.
+func GetOpenAIApiKey() (string, error) {
+	apiKey, exists := os.LookupEnv("OPENAI_API_KEY")
+	if !exists {
+		slog.Error("OpenAI API key not set", "env_var", "OPENAI_API_KEY", "help", "set via export OPENAI_API_KEY")
+		return "", errors.New("OpenAI API key not set")
+	}
+	if utf8.RuneCountInString(apiKey) < minKeyLength {
+		slog.Error("OpenAI API key too short", "required", minKeyLength, "got", utf8.RuneCountInString(apiKey))
+		return "", fmt.Errorf("OpenAI API key must be at least %d characters (got %d)", minKeyLength, utf8.RuneCountInString(apiKey))
+	}
+	return apiKey, nil
+}
+
+// GetOpenRouterApiKey returns the Gemini API key from the environment.
+func GetOpenRouterApiKey() (string, error) {
+	apiKey, exists := os.LookupEnv("OPEN_ROUTER_API_KEY")
+	if !exists {
+		slog.Error("OpenRouter API key not set", "env_var", "OPEN_ROUTER_API_KEY", "help", "set via export OPEN_ROUTER_API_KEY")
+		return "", errors.New("OpenRouter API key not set")
+	}
+	if utf8.RuneCountInString(apiKey) < minKeyLength {
+		slog.Error("OpenRouter API key too short", "required", minKeyLength, "got", utf8.RuneCountInString(apiKey))
+		return "", fmt.Errorf("OpenRouter API key must be at least %d characters (got %d)", minKeyLength, utf8.RuneCountInString(apiKey))
+	}
+	return apiKey, nil
 }

@@ -9,9 +9,9 @@ import (
 	"net/http"
 )
 
-// httpRequest performs a generic HTTP POST request and unmarshals the response.
+// HttpRequest performs a generic HTTP POST request and unmarshals the response.
 // It's designed to be used by providers that don't follow the OpenAI API schema.
-func httpRequest[ReqT any, RespT any](
+func HttpRequest[ReqT any, RespT any](
 	ctx context.Context,
 	client *http.Client,
 	url string,

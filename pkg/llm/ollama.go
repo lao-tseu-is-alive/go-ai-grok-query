@@ -3,23 +3,23 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid" // Add this import for tool ID generation
 )
 
-// INFO: https://github.com/ollama/ollama/blob/main/docs/api.md
-
-const OllamaUrl = "http://localhost:11434/api/chat"
-const ollamaChatPath = "/api/chat"
-
 // OllamaProvider implements the Provider interface for local Ollama models.
+// It handles tool calls, though Ollama's API lacks tool call IDs (we generate UUIDs to maintain compatibility).
 type OllamaProvider struct {
 	BaseURL string
 	Model   string
 	Client  *http.Client
 }
 
-// Ollama-specific request payload structure
+// ollamaRequest represents the request payload for Ollama's chat API.
 type ollamaRequest struct {
 	Model    string           `json:"model"`
 	Messages []map[string]any `json:"messages"`
@@ -28,7 +28,7 @@ type ollamaRequest struct {
 	Options  map[string]any   `json:"options,omitempty"`
 }
 
-// Ollama-specific response payload structure
+// ollamaResponse represents the response payload from Ollama's chat API.
 type ollamaResponse struct {
 	Model   string `json:"model"`
 	Message struct {
@@ -45,26 +45,31 @@ type ollamaResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-func newOllamaAdapter(cfg ProviderConfig) (Provider, error) {
-	base := cfg.BaseURL
-	if base == "" {
-		base = "http://localhost:11434"
-	}
+// NewOllamaAdapter creates a new OllamaProvider from config.
+func NewOllamaAdapter(cfg ProviderConfig) (Provider, error) {
 	if cfg.Model == "" {
 		return nil, fmt.Errorf("ollama: missing model")
 	}
+	baseURL := FirstNonEmpty(cfg.BaseURL, "http://localhost:11434")
 	return &OllamaProvider{
-		BaseURL: base,
+		BaseURL: baseURL,
 		Model:   cfg.Model,
-		Client:  &http.Client{Timeout: 0},
+		Client:  &http.Client{Timeout: 30 * time.Second}, // Add timeout to prevent hangs
 	}, nil
 }
 
 func (o *OllamaProvider) Query(ctx context.Context, req *LLMRequest) (*LLMResponse, error) {
-	// 1. Build the Ollama-specific request payload
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+	if len(req.Messages) == 0 {
+		return nil, errors.New("request must have messages")
+	}
+
+	// Build payload
 	payload := ollamaRequest{
 		Model:    FirstNonEmpty(req.Model, o.Model),
-		Messages: toOpenAIChatMessages(req.Messages),
+		Messages: ToOpenAIChatMessages(req.Messages), // Exported version
 		Stream:   false,
 	}
 	if req.Temperature > 0 {
@@ -74,40 +79,38 @@ func (o *OllamaProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 		payload.Tools = req.Tools
 	}
 
-	// 2. Prepare headers and call the generic helper
 	headers := http.Header{"Content-Type": []string{"application/json"}}
-	url := o.BaseURL + ollamaChatPath
+	url := o.BaseURL + "/api/chat"
 
-	wire, rawResp, err := httpRequest[ollamaRequest, ollamaResponse](ctx, o.Client, url, headers, payload)
+	responseData, rawResp, err := HttpRequest[ollamaRequest, ollamaResponse](ctx, o.Client, url, headers, payload)
 	if err != nil {
-		return nil, fmt.Errorf("ollama: http error: %w body: %s", err, string(rawResp))
+		return nil, fmt.Errorf("ollama request failed: %w (raw body: %s)", err, string(rawResp))
 	}
-	if wire.Error != "" {
-		return nil, fmt.Errorf("ollama: provider error: %s", wire.Error)
+	if responseData.Error != "" {
+		return nil, fmt.Errorf("ollama API error: %s", responseData.Error)
 	}
 
-	// 3. Map the Ollama response to our standard LLMResponse
-	out := &LLMResponse{
-		Text: wire.Message.Content,
+	// Map to LLMResponse
+	llmResp := &LLMResponse{
+		Text: responseData.Message.Content,
 		Raw:  json.RawMessage(rawResp),
 	}
-	for _, tc := range wire.Message.ToolCalls {
-		out.ToolCalls = append(out.ToolCalls, ToolCall{
-			// Note: Ollama doesn't provide a tool call ID, so we might need
-			// to generate one if downstream logic depends on it.
+	for _, tc := range responseData.Message.ToolCalls {
+		toolCall := ToolCall{
+			ID:        uuid.NewString(), // Generate ID to avoid nil/blank values
 			Name:      tc.Function.Name,
 			Arguments: tc.Function.Arguments,
-		})
+		}
+		llmResp.ToolCalls = append(llmResp.ToolCalls, toolCall)
 	}
 
-	return out, nil
+	return llmResp, nil
 }
 
 func (o *OllamaProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
-	// TODO: implement streaming with chunked JSON lines; Ollama streams sequence of objects.
-	return nil, fmt.Errorf("ollama: streaming not implemented")
+	return nil, errors.New("ollama streaming not implemented") // Stub with proper error
 }
+
 func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	// Optional: GET /api/tags to list models
-	return nil, fmt.Errorf("ollama: ListModels not implemented")
+	return nil, errors.New("ollama list models not implemented") // Stub
 }

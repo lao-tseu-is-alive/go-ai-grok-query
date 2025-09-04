@@ -46,37 +46,48 @@ func NewProvider(cfg ProviderConfig) (Provider, error) {
 	if cfg.Kind == "" {
 		return nil, errors.New("provider kind cannot be empty")
 	}
-	if cfg.APIKey == "" && !isLocalProvider(cfg.Kind) {
-		return nil, fmt.Errorf("API key required for provider %q", cfg.Kind)
-	}
 	if cfg.Model == "" {
 		return nil, fmt.Errorf("model required for provider %q", cfg.Kind)
 	}
 
 	switch cfg.Kind {
 	case ProviderOpenAI:
-		return newOpenAICompatAdapter(cfg, "https://api.openai.com/v1")
+		if cfg.APIKey == "" {
+			key, err := config.GetOpenAIApiKey()
+			if err != nil {
+				return nil, err
+			}
+			cfg.APIKey = key
+		}
+		return NewOpenAICompatAdapter(cfg, "https://api.openai.com/v1")
 	case ProviderOpenRouter:
-		return newOpenAICompatAdapter(cfg, "https://openrouter.ai/api/v1")
+		if cfg.APIKey == "" {
+			key, err := config.GetOpenRouterApiKey()
+			if err != nil {
+				return nil, err
+			}
+			cfg.APIKey = key
+		}
+		return NewOpenAICompatAdapter(cfg, "https://openrouter.ai/api/v1")
 
 	case ProviderGemini:
 		if cfg.BaseURL == "" {
 			cfg.BaseURL = "https://generativelanguage.googleapis.com"
 		}
 		if cfg.APIKey == "" {
-			key, err := config.GetGeminiApiKeyFromEnv()
+			key, err := config.GetGeminiApiKey()
 			if err != nil {
 				return nil, err
 			}
 			cfg.APIKey = key
 		}
-		return newGeminiAdapter(cfg)
+		return NewGeminiAdapter(cfg)
 	case ProviderXAI:
 		if cfg.BaseURL == "" {
 			cfg.BaseURL = "https://api.x.ai/v1"
 		}
 		if cfg.APIKey == "" {
-			key, err := config.GetXaiApiKeyFromEnv()
+			key, err := config.GetXaiApiKey()
 			if err != nil {
 				return nil, err
 			}
@@ -87,7 +98,7 @@ func NewProvider(cfg ProviderConfig) (Provider, error) {
 		if cfg.BaseURL == "" {
 			cfg.BaseURL = "http://localhost:11434"
 		}
-		return newOllamaAdapter(cfg)
+		return NewOllamaAdapter(cfg)
 
 	default:
 		return nil, fmt.Errorf("unsupported provider: %q", cfg.Kind)
@@ -99,8 +110,8 @@ func isLocalProvider(kind ProviderKind) bool {
 	return kind == ProviderOllama
 }
 
-// newOpenAICompatAdapter is a shared constructor for OpenAI-like providers.
-func newOpenAICompatAdapter(cfg ProviderConfig, defaultBaseURL string) (Provider, error) {
+// NewOpenAICompatAdapter is a shared constructor for OpenAI-like providers.
+func NewOpenAICompatAdapter(cfg ProviderConfig, defaultBaseURL string) (Provider, error) {
 	baseURL := FirstNonEmpty(cfg.BaseURL, defaultBaseURL)
 	return &openAICompatibleProvider{
 		BaseURL:      baseURL,

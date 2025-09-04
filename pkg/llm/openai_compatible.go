@@ -60,7 +60,7 @@ func (p *openAICompatibleProvider) Query(ctx context.Context, req *LLMRequest) (
 		}
 	*/
 
-	_, rawBody, err := httpRequest[map[string]any, any](
+	_, rawBody, err := HttpRequest[map[string]any, any](
 		ctx, p.Client, p.BaseURL+p.Endpoint, headers, payload,
 	)
 	if err != nil {
@@ -134,7 +134,7 @@ func unmarshalResponse(rawResp json.RawMessage) (*LLMResponse, error) {
 func buildPayload(req *LLMRequest, defaultModel string) map[string]any {
 	payload := map[string]any{
 		"model":    FirstNonEmpty(req.Model, defaultModel),
-		"messages": toOpenAIChatMessages(req.Messages),
+		"messages": ToOpenAIChatMessages(req.Messages),
 		"stream":   req.Stream,
 	}
 	// Add optional parameters...
