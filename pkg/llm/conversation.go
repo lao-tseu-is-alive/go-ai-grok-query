@@ -1,27 +1,55 @@
 package llm
 
-// Conversation manages the history of a chat.
+import (
+	"errors"
+	"log/slog"
+	"slices"
+	"sync"
+)
+
+// Conversation manages a thread-safe history of LLM messages.
+// It supports system prompts, user/assistant turns, and tool results.
 type Conversation struct {
-	Messages []LLMMessage
+	mu           sync.RWMutex
+	Messages     []LLMMessage
+	SystemPrompt string // Cache for easy access
 }
 
-func NewConversation(systemPrompt string) *Conversation {
+// NewConversation creates a new conversation with the given system prompt.
+// Returns an error if the prompt is empty for safety.
+func NewConversation(systemPrompt string) (*Conversation, error) {
+	if systemPrompt == "" {
+		return nil, errors.New("system prompt cannot be empty")
+	}
 	return &Conversation{
 		Messages: []LLMMessage{
 			{Role: RoleSystem, Content: systemPrompt},
 		},
+		SystemPrompt: systemPrompt,
+	}, nil
+}
+
+// AddUserMessage appends a user message.
+// Returns an error if content is empty.
+func (c *Conversation) AddUserMessage(content string) error {
+	if content == "" {
+		return errors.New("user message content cannot be empty")
 	}
-}
-
-// AddUserMessage adds a user message to the conversation.
-func (c *Conversation) AddUserMessage(content string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.Messages = append(c.Messages, LLMMessage{Role: RoleUser, Content: content})
+	return nil
 }
 
-// AddAssistantResponse adds the assistant's response, including any tool calls.
+// AddAssistantResponse appends an assistant response, including tool calls.
+// Extracts text and tool calls from the response.
 func (c *Conversation) AddAssistantResponse(resp *LLMResponse) {
-	// For OpenAI compatibility, we need to create a message with tool_calls.
-	// We'll add this to the types later. For now, let's keep it simple.
+	if resp == nil {
+		slog.Warn("Nil response passed to AddAssistantResponse")
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.Messages = append(c.Messages, LLMMessage{
 		Role:      RoleAssistant,
 		Content:   resp.Text,
@@ -29,11 +57,23 @@ func (c *Conversation) AddAssistantResponse(resp *LLMResponse) {
 	})
 }
 
-// AddToolResultMessage adds the result of a tool call to the conversation.
+// AddToolResultMessage appends a tool's result by its call ID.
 func (c *Conversation) AddToolResultMessage(toolCallID, result string) {
+	if toolCallID == "" || result == "" {
+		slog.Warn("Empty tool call ID or result", "id", toolCallID)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.Messages = append(c.Messages, LLMMessage{
 		Role:       RoleTool,
 		ToolCallID: toolCallID,
 		Content:    result,
 	})
+}
+
+// MessagesCopy returns a thread-safe copy of messages for querying.
+func (c *Conversation) MessagesCopy() []LLMMessage {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return slices.Clone(c.Messages) // Go 1.21+ for immutability
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"net/http"
 
 	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 )
@@ -38,19 +40,24 @@ type ProviderConfig struct {
 	Extras map[string]any
 }
 
+// NewProvider creates a new provider based on kind.
+// Validates config and applies defaults.
 func NewProvider(cfg ProviderConfig) (Provider, error) {
+	if cfg.Kind == "" {
+		return nil, errors.New("provider kind cannot be empty")
+	}
+	if cfg.APIKey == "" && !isLocalProvider(cfg.Kind) {
+		return nil, fmt.Errorf("API key required for provider %q", cfg.Kind)
+	}
+	if cfg.Model == "" {
+		return nil, fmt.Errorf("model required for provider %q", cfg.Kind)
+	}
+
 	switch cfg.Kind {
 	case ProviderOpenAI:
-		if cfg.BaseURL == "" {
-			cfg.BaseURL = "https://api.openai.com/v1"
-		}
-		return newOpenAIAdapter(cfg)
+		return newOpenAICompatAdapter(cfg, "https://api.openai.com/v1")
 	case ProviderOpenRouter:
-		if cfg.BaseURL == "" {
-			cfg.BaseURL = "https://openrouter.ai/api/v1"
-		}
-		// OpenRouter is OpenAI-compatible chat/completions; reuse adapter
-		return newOpenRouterAdapter(cfg)
+		return newOpenAICompatAdapter(cfg, "https://openrouter.ai/api/v1")
 
 	case ProviderGemini:
 		if cfg.BaseURL == "" {
@@ -81,7 +88,26 @@ func NewProvider(cfg ProviderConfig) (Provider, error) {
 			cfg.BaseURL = "http://localhost:11434"
 		}
 		return newOllamaAdapter(cfg)
+
 	default:
-		return nil, errors.New(fmt.Sprintf("unsupported provider kind: %s", cfg.Kind))
+		return nil, fmt.Errorf("unsupported provider: %q", cfg.Kind)
 	}
+}
+
+// isLocalProvider checks if a provider doesn't need an explicit API key.
+func isLocalProvider(kind ProviderKind) bool {
+	return kind == ProviderOllama
+}
+
+// newOpenAICompatAdapter is a shared constructor for OpenAI-like providers.
+func newOpenAICompatAdapter(cfg ProviderConfig, defaultBaseURL string) (Provider, error) {
+	baseURL := FirstNonEmpty(cfg.BaseURL, defaultBaseURL)
+	return &openAICompatibleProvider{
+		BaseURL:      baseURL,
+		APIKey:       cfg.APIKey,
+		Model:        cfg.Model,
+		Client:       &http.Client{},
+		ExtraHeaders: maps.Clone(cfg.ExtraHeaders), // Go 1.21+
+		Endpoint:     "/chat/completions",
+	}, nil
 }

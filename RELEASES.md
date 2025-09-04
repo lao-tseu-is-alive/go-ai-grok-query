@@ -1,3 +1,51 @@
+### Release 0.2.1 :
+
+##### Error Handling & Library-Neutrality:
+Removed library-hostile behaviors like os.Exit(1) from the llm package (e.g., in tools.go and Check function). Replaced with proper error propagation, allowing calling code (like your main program) to handle failures. Added input validation and graceful error wrapping with fmt.Errorf.
+
+##### Modularity and Pluggability:
+Introduced interfaces (e.g., ToolExecutor) and structs for better extensibility, such as making tools like WeatherTool pluggable via methods instead of global functions. Suggested patterns like ExampleToolRegistry for managing multiple tools without hardcoding.
+
+##### Thread-Safety and Concurrency:
+Added mutexes (e.g., sync.RWMutex in Conversation) and methods like MessagesCopy() to prevent race conditions when accessing shared data, especially in long-running or concurrent contexts (e.g., futures or goroutines).
+
+##### Type Safety and Compilation Fixes:
+Resolved type mismatches (e.g., maps.Copy failing due to http.Header vs. map[string]string). Improved JSON handling, generics usage (e.g., in httpRequest), and removed unused variables/statements.
+
+##### Readability and Documentation:
+Added GoDoc comments, descriptive variable names, consistent formatting, and logging via slog. Replaced terse code (e.g., p in functions) with clearer constructs. Ensured Markdown-ready docstrings.
+
+##### Configuration and Flexibility:
+Enhanced provider setup with better defaults, validation for required fields (e.g., API key checks), and support for extra headers/limits. Made config optional where possible to reduce boilerplate.
+
+##### Specific File Updates:
+
++ toolCalling.go: Converted to use structs (e.g., WeatherTool), added error checks, fixed undefined calls (e.g., getCurrentWeather → tool.Execute), and integrated safe conversation access.
+tools.go: Exported helpers like FirstNonEmpty, removed side effects, and improved message serialization.
+
++ conversation.go: Added validation, thread-safety, and immutable copies.
+
++ openai_compatible.go: Fixed header merging loops, removed unused wireResponse, and refined unmarshaling.
+
++ provider.go and others: Deduplicated logic and added better error messages.
+
+##### Why These Changes
+
++ Problems in Original Code: Issues like potential panics (e.g., nil pointer derefs), lack of concurrency safety, hardcoded solutions, and compile errors reduced the code's reliability for production use.
++ Goals Aligned with Best Practices: Followed Go idioms (e.g., error-as-value), SOLID principles (e.g., dependency injection via interfaces), and your requests for readability/easy maintenance. Made it "library-ready" (no exits) and adapted for real-world multi-tool, multi-provider scenarios.
+
+##### Key Benefits
++ Usability: Easier to use in different contexts (e.g., web apps, CLIs) without worrying about crashes. Tools are now swap-in/swappable.
+
++ Maintainability: Cleaner separation of concerns, more tests-friendly (e.g., no global state), and self-documenting code reduces future bugs.
+
++ Robustness: Better handling of edge cases (e.g., empty responses, invalid inputs) with retries/panics. Improved security (e.g., no raw exits leaking control flow).
+
++ Performance/Simplicity: Efficient without over-engineering; supports streaming/tools without complexity blowup.
+
++ Scalability: Easing addition of new providers or tools with minimal rework.
+
+
 ### Release 0.2.0 :
 
 The main evolutions in the llm package are a shift from a minimal, 

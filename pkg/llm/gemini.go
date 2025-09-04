@@ -81,7 +81,7 @@ func (g *GeminiProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 	}
 
 	// 2. Prepare headers and call the generic helper
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent", g.BaseURL, firstNonEmpty(req.Model, g.Model))
+	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent", g.BaseURL, FirstNonEmpty(req.Model, g.Model))
 	headers := http.Header{
 		"Content-Type":   []string{"application/json"},
 		"x-goog-api-key": []string{g.APIKey},

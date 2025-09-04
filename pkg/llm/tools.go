@@ -1,64 +1,67 @@
 package llm
 
 import (
+	"encoding/json"
 	"fmt"
-	"os"
 )
 
-// Reuse helpers from other adapters
-
+// toOpenAIChatMessages converts internal messages to OpenAI API format.
+// It handles optional fields like tool_calls and ensures compatibility.
 func toOpenAIChatMessages(msgs []LLMMessage) []map[string]any {
 	out := make([]map[string]any, 0, len(msgs))
-	for _, m := range msgs {
-		// The content can be an empty string, but for some models (like early OpenAI ones)
-		// it was better to send `null`. Sending an empty string is broadly compatible.
+	for _, msg := range msgs {
 		item := map[string]any{
-			"role":    m.Role,
-			"content": m.Content,
+			"role":    msg.Role,
+			"content": msg.Content,
 		}
-		if m.Name != "" {
-			item["name"] = m.Name
+		if msg.Name != "" {
+			item["name"] = msg.Name
 		}
-		if m.ToolCallID != "" {
-			item["tool_call_id"] = m.ToolCallID
+		if msg.ToolCallID != "" {
+			item["tool_call_id"] = msg.ToolCallID
 		}
-
-		// ✨ NEW: Handle serializing the assistant's tool calls ✨
-		if len(m.ToolCalls) > 0 {
-			// The API expects a specific structure for tool_calls
-			apiToolCalls := make([]map[string]any, len(m.ToolCalls))
-			for i, tc := range m.ToolCalls {
+		if len(msg.ToolCalls) > 0 {
+			apiToolCalls := make([]map[string]any, len(msg.ToolCalls))
+			for i, tc := range msg.ToolCalls {
 				apiToolCalls[i] = map[string]any{
 					"id":   tc.ID,
-					"type": "function", // Currently, only "function" is supported
+					"type": "function",
 					"function": map[string]any{
-						"name": tc.Name,
-						// The API expects the arguments to be a string
+						"name":      tc.Name,
 						"arguments": string(tc.Arguments),
 					},
 				}
 			}
 			item["tool_calls"] = apiToolCalls
-
-			// Per OpenAI spec, if tool_calls is present, content must be null.
-			// While many models handle an empty string, `nil` is more correct.
-			item["content"] = nil
+			item["content"] = nil // OpenAI spec requires null when tool_calls present
 		}
 		out = append(out, item)
 	}
 	return out
 }
 
-func firstNonEmpty(a, b string) string {
+// FirstNonEmpty returns the first non-empty string, falling back to the second.
+func FirstNonEmpty(a, b string) string {
 	if a != "" {
 		return a
 	}
 	return b
 }
 
-func Check(err error, msg string) {
-	if err != nil {
-		fmt.Printf("Error %s: %v\n", msg, err)
-		os.Exit(1)
+// ToolExecutor defines an interface for executing tools.
+// This makes tools pluggable and testable.
+type ToolExecutor interface {
+	Execute(args json.RawMessage) (string, error)
+}
+
+// ExampleToolRegistry is a simple map of tool names to executors (for demonstration).
+type ExampleToolRegistry map[string]ToolExecutor
+
+// Execute looks up and runs a tool by name.
+func (r ExampleToolRegistry) Execute(name string, args json.RawMessage) (string, error) {
+	exec, exists := r[name]
+	if !exists {
+		return "", fmt.Errorf("tool %q not found", name)
 	}
+	return exec.Execute(args)
 }

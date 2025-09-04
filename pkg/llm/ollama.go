@@ -63,7 +63,7 @@ func newOllamaAdapter(cfg ProviderConfig) (Provider, error) {
 func (o *OllamaProvider) Query(ctx context.Context, req *LLMRequest) (*LLMResponse, error) {
 	// 1. Build the Ollama-specific request payload
 	payload := ollamaRequest{
-		Model:    firstNonEmpty(req.Model, o.Model),
+		Model:    FirstNonEmpty(req.Model, o.Model),
 		Messages: toOpenAIChatMessages(req.Messages),
 		Stream:   false,
 	}
