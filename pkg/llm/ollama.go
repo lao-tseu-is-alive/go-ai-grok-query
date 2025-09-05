@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid" // Add this import for tool ID generation
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 // OllamaProvider implements the Provider interface for local Ollama models.
@@ -17,6 +18,7 @@ type OllamaProvider struct {
 	BaseURL string
 	Model   string
 	Client  *http.Client
+	l       golog.MyLogger
 }
 
 // ollamaRequest represents the request payload for Ollama's chat API.
@@ -46,7 +48,7 @@ type ollamaResponse struct {
 }
 
 // NewOllamaAdapter creates a new OllamaProvider from config.
-func NewOllamaAdapter(cfg ProviderConfig) (Provider, error) {
+func NewOllamaAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.Model == "" {
 		return nil, fmt.Errorf("ollama: missing model")
 	}
@@ -55,6 +57,7 @@ func NewOllamaAdapter(cfg ProviderConfig) (Provider, error) {
 		BaseURL: baseURL,
 		Model:   cfg.Model,
 		Client:  &http.Client{Timeout: 30 * time.Second}, // Add timeout to prevent hangs
+		l:       l,
 	}, nil
 }
 
@@ -82,7 +85,7 @@ func (o *OllamaProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 	headers := http.Header{"Content-Type": []string{"application/json"}}
 	url := o.BaseURL + "/api/chat"
 
-	responseData, rawResp, err := HttpRequest[ollamaRequest, ollamaResponse](ctx, o.Client, url, headers, payload)
+	responseData, rawResp, err := HttpRequest[ollamaRequest, ollamaResponse](ctx, o.Client, url, headers, payload, o.l)
 	if err != nil {
 		return nil, fmt.Errorf("ollama request failed: %w (raw body: %s)", err, string(rawResp))
 	}

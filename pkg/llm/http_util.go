@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 // HttpRequest performs a generic HTTP POST request and unmarshals the response.
@@ -17,6 +19,7 @@ func HttpRequest[ReqT any, RespT any](
 	url string,
 	headers http.Header,
 	requestBody ReqT,
+	l golog.MyLogger,
 ) (*RespT, []byte, error) {
 
 	// 1. Marshal the request body
@@ -35,6 +38,7 @@ func HttpRequest[ReqT any, RespT any](
 	// 3. Execute the request
 	resp, err := client.Do(httpReq)
 	if err != nil {
+		l.Warn("failed http request: %s %s", httpReq.Method, httpReq.URL)
 		return nil, nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -46,6 +50,7 @@ func HttpRequest[ReqT any, RespT any](
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		l.Warn("non-2xx status code : %d, body:%q", resp.StatusCode, string(respBody))
 		return nil, respBody, fmt.Errorf("received non-2xx status code %d", resp.StatusCode)
 	}
 

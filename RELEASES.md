@@ -1,3 +1,11 @@
+### Release 0.2.2 :
+
+##### Error Handling :
+Added better log handling to debug errors in requests.
+
+##### Configuration and Flexibility:
+Added provider flag with easy selection of a default model
+
 ### Release 0.2.1 :
 
 ##### Error Handling & Library-Neutrality:

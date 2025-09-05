@@ -3,13 +3,15 @@ package llm
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 type XaiProvider struct {
 	openAICompatibleProvider
 }
 
-func newXaiAdapter(cfg ProviderConfig) (Provider, error) {
+func newXaiAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("xai: missing API key")
 	}
@@ -28,6 +30,7 @@ func newXaiAdapter(cfg ProviderConfig) (Provider, error) {
 			Client:       &http.Client{},
 			ExtraHeaders: cfg.ExtraHeaders,
 			Endpoint:     "/chat/completions",
+			l:            l,
 		},
 	}, nil
 }

@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 // openAICompatibleProvider provides a base for providers that use an OpenAI-compatible API.
@@ -16,6 +19,21 @@ type openAICompatibleProvider struct {
 	Client       *http.Client
 	ExtraHeaders map[string]string
 	Endpoint     string
+	l            golog.MyLogger
+}
+
+// NewOpenAICompatAdapter is a shared constructor for OpenAI-like providers.
+func NewOpenAICompatAdapter(cfg ProviderConfig, defaultBaseURL string, l golog.MyLogger) (Provider, error) {
+	baseURL := FirstNonEmpty(cfg.BaseURL, defaultBaseURL)
+	return &openAICompatibleProvider{
+		BaseURL:      baseURL,
+		APIKey:       cfg.APIKey,
+		Model:        cfg.Model,
+		Client:       &http.Client{},
+		ExtraHeaders: maps.Clone(cfg.ExtraHeaders), // Go 1.21+
+		Endpoint:     "/chat/completions",
+		l:            l,
+	}, nil
 }
 
 // Query sends a request to an OpenAI-compatible API.
@@ -28,7 +46,6 @@ func (p *openAICompatibleProvider) Query(ctx context.Context, req *LLMRequest) (
 	if len(req.Messages) == 0 {
 		return nil, errors.New("request must have at least one message")
 	}
-	// ... (additional validations if needed)
 
 	payload := buildPayload(req, p.Model)
 	headers := http.Header{
@@ -42,31 +59,15 @@ func (p *openAICompatibleProvider) Query(ctx context.Context, req *LLMRequest) (
 	for key, value := range req.ExtraHeaders {
 		headers[key] = []string{value}
 	}
-	/*
-		var wireResponse struct {
-			Choices []struct {
-				FinishReason string    `json:"finish_reason"`
-				Message      *struct { // Pointer to detect nil
-					Role      string `json:"role"`
-					Content   string `json:"content"`
-					ToolCalls []struct {
-						ID       string          `json:"id"`
-						Type     string          `json:"type"`
-						Function json.RawMessage `json:"function"`
-					} `json:"tool_calls,omitempty"`
-				} `json:"message"`
-			} `json:"choices"`
-			Usage *Usage `json:"usage,omitempty"`
-		}
-	*/
-
+	p.l.Debug("about to send request to %s", p.BaseURL+p.Endpoint)
 	_, rawBody, err := HttpRequest[map[string]any, any](
-		ctx, p.Client, p.BaseURL+p.Endpoint, headers, payload,
+		ctx, p.Client, p.BaseURL+p.Endpoint, headers, payload, p.l,
 	)
 	if err != nil {
+		p.l.Warn("got error during HttpRequest: %q", err)
 		return nil, fmt.Errorf("http request failed: %w", err)
 	}
-
+	p.l.Debug("successful HttpRequest, rawbody: %s", string(rawBody))
 	// Use dedicated unmarshal for better control
 	resp, err := unmarshalResponse(rawBody)
 	if err != nil {

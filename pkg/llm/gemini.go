@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"path"
 	"time"
+
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 // GeminiProvider implements the Provider interface for Google's Gemini models.
@@ -17,6 +19,7 @@ type GeminiProvider struct {
 	APIKey  string
 	Model   string
 	Client  *http.Client
+	l       golog.MyLogger
 }
 
 // geminiRequest represents the request payload for Gemini's generateContent API.
@@ -44,7 +47,7 @@ type geminiResponse struct {
 }
 
 // NewGeminiAdapter creates a new GeminiProvider from config.
-func NewGeminiAdapter(cfg ProviderConfig) (Provider, error) {
+func NewGeminiAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("gemini: API key required") // Shorter, error-based
 	}
@@ -57,6 +60,7 @@ func NewGeminiAdapter(cfg ProviderConfig) (Provider, error) {
 		APIKey:  cfg.APIKey,
 		Model:   cfg.Model,
 		Client:  &http.Client{Timeout: 30 * time.Second},
+		l:       l,
 	}, nil
 }
 
@@ -91,7 +95,7 @@ func (g *GeminiProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 		"x-goog-api-key": []string{g.APIKey},
 	}
 
-	responseData, rawResp, err := HttpRequest[geminiRequest, geminiResponse](ctx, g.Client, url, headers, payload)
+	responseData, rawResp, err := HttpRequest[geminiRequest, geminiResponse](ctx, g.Client, url, headers, payload, g.l)
 	if err != nil {
 		return nil, fmt.Errorf("gemini request failed: %w (raw body: %s)", err, string(rawResp))
 	}

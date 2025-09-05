@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
-	"net/http"
 
 	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 type ProviderKind string
@@ -42,12 +41,20 @@ type ProviderConfig struct {
 
 // NewProvider creates a new provider based on kind.
 // Validates config and applies defaults.
-func NewProvider(cfg ProviderConfig) (Provider, error) {
-	if cfg.Kind == "" {
+func NewProvider(kind ProviderKind, model string, l golog.MyLogger) (Provider, error) {
+	if kind == "" {
 		return nil, errors.New("provider kind cannot be empty")
 	}
-	if cfg.Model == "" {
-		return nil, fmt.Errorf("model required for provider %q", cfg.Kind)
+	if model == "" {
+		return nil, fmt.Errorf("model required for provider %q", kind)
+	}
+	cfg := ProviderConfig{
+		Kind:         kind,
+		BaseURL:      "",
+		APIKey:       "",
+		Model:        model,
+		ExtraHeaders: nil,
+		Extras:       nil,
 	}
 
 	switch cfg.Kind {
@@ -57,18 +64,20 @@ func NewProvider(cfg ProviderConfig) (Provider, error) {
 			if err != nil {
 				return nil, err
 			}
+			l.Info("success retrieving OpenAI ApiKey")
 			cfg.APIKey = key
 		}
-		return NewOpenAICompatAdapter(cfg, "https://api.openai.com/v1")
+		return NewOpenAICompatAdapter(cfg, "https://api.openai.com/v1", l)
 	case ProviderOpenRouter:
 		if cfg.APIKey == "" {
 			key, err := config.GetOpenRouterApiKey()
 			if err != nil {
 				return nil, err
 			}
+			l.Info("success retrieving OpenRouter ApiKey")
 			cfg.APIKey = key
 		}
-		return NewOpenAICompatAdapter(cfg, "https://openrouter.ai/api/v1")
+		return NewOpenAICompatAdapter(cfg, "https://openrouter.ai/api/v1", l)
 
 	case ProviderGemini:
 		if cfg.BaseURL == "" {
@@ -79,9 +88,10 @@ func NewProvider(cfg ProviderConfig) (Provider, error) {
 			if err != nil {
 				return nil, err
 			}
+			l.Info("success retrieving Gemini ApiKey")
 			cfg.APIKey = key
 		}
-		return NewGeminiAdapter(cfg)
+		return NewGeminiAdapter(cfg, l)
 	case ProviderXAI:
 		if cfg.BaseURL == "" {
 			cfg.BaseURL = "https://api.x.ai/v1"
@@ -91,14 +101,15 @@ func NewProvider(cfg ProviderConfig) (Provider, error) {
 			if err != nil {
 				return nil, err
 			}
+			l.Info("success retrieving XAI ApiKey")
 			cfg.APIKey = key
 		}
-		return newXaiAdapter(cfg) // if using OpenAI-compatible chat/completions semantics
+		return newXaiAdapter(cfg, l) // if using OpenAI-compatible chat/completions semantics
 	case ProviderOllama:
 		if cfg.BaseURL == "" {
 			cfg.BaseURL = "http://localhost:11434"
 		}
-		return NewOllamaAdapter(cfg)
+		return NewOllamaAdapter(cfg, l)
 
 	default:
 		return nil, fmt.Errorf("unsupported provider: %q", cfg.Kind)
@@ -110,15 +121,21 @@ func isLocalProvider(kind ProviderKind) bool {
 	return kind == ProviderOllama
 }
 
-// NewOpenAICompatAdapter is a shared constructor for OpenAI-like providers.
-func NewOpenAICompatAdapter(cfg ProviderConfig, defaultBaseURL string) (Provider, error) {
-	baseURL := FirstNonEmpty(cfg.BaseURL, defaultBaseURL)
-	return &openAICompatibleProvider{
-		BaseURL:      baseURL,
-		APIKey:       cfg.APIKey,
-		Model:        cfg.Model,
-		Client:       &http.Client{},
-		ExtraHeaders: maps.Clone(cfg.ExtraHeaders), // Go 1.21+
-		Endpoint:     "/chat/completions",
-	}, nil
+func GetProviderKindAndDefaultModel(kind string) (p ProviderKind, defaultModel string, err error) {
+	switch kind {
+	case "ollama":
+		return ProviderOllama, "qwen3:latest", nil
+	case "gemini":
+		return ProviderGemini, "gemini-2.5-flash", nil
+	case "xai":
+		return ProviderXAI, "grok-3-mini", nil
+	case "openai":
+		return ProviderOpenAI, "gpt-4o-mini", nil
+	case "openrouter":
+		return ProviderOpenRouter, "qwen/qwen3-4b:free", nil
+
+	default:
+		return "", "", fmt.Errorf("provider kind %s is not available", kind)
+
+	}
 }

@@ -3,23 +3,36 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"log/slog"
+	"log"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/llm"
+	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/version"
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
-func check(err error, msg string) {
+const (
+	defaultSystemPrompt = "You are a helpful weather assistant. Use tools when asked for weather data."
+	defaultPrompt       = "What's the weather right now in Lausanne in Switzerland?"
+	defaultLogName      = "stderr"
+)
+
+func check(err error, msg string, l golog.MyLogger) {
 	if err != nil {
-		fmt.Printf("Error %s: %v\n", msg, err)
+		l.Error("💥💥 error %s: %v\n", msg, err)
 		os.Exit(1)
 	}
 }
 
 // WeatherTool Dummy weather tool with proper implementation.
-type WeatherTool struct{}
+type WeatherTool struct {
+	l golog.MyLogger
+}
 
 // Execute Tool implementation
 func (w WeatherTool) Execute(args json.RawMessage) (string, error) {
@@ -48,20 +61,20 @@ func (w WeatherTool) Execute(args json.RawMessage) (string, error) {
 	}
 	params.Format = llm.FirstNonEmpty(params.Format, "celsius")
 
-	// Log for debugging (easy to toggle via slog level).
-	slog.Info("Executing weather tool",
-		"location", params.Location,
-		"format", params.Format,
-		"tool", "get_current_weather")
+	w.l.Info("Executing tool get_current_weather location %s", params.Location)
 
 	// Simulate a service call with mock data (replace with real API).
-	// For demo, always returns the same weather.
 	result := map[string]any{
 		"location": params.Location,
 		"temp":     22.5,
 		"unit":     map[string]string{"celsius": "C", "fahrenheit": "F"}[params.Format],
 		"summary":  "Partly cloudy with light breeze",
 	}
+
+	if strings.Contains(params.Location, "Lausanne") {
+		result["summary"] = "You better look out your window"
+	}
+
 	out, err := json.Marshal(result)
 	if err != nil {
 		return "", fmt.Errorf("marshal result: %w", err) // Unlikely, but safe.
@@ -70,20 +83,40 @@ func (w WeatherTool) Execute(args json.RawMessage) (string, error) {
 }
 
 func main() {
-	// Validate environment (keeps secure, no secrets in code).
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		fmt.Println("Please set OPENAI_API_KEY environment variable.")
+	l, err := golog.NewLogger(
+		"simple",
+		config.GetLogWriterFromEnvOrPanic(defaultLogName),
+		config.GetLogLevelFromEnvOrPanic(golog.InfoLevel),
+		version.APP,
+	)
+	if err != nil {
+		log.Fatalf("💥💥 error golog.NewLogger error: %v'\n", err)
+	}
+	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, from: %s", version.APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
+
+	// Define command-line flags for provider selection and prompt
+	providerFlag := flag.String("provider", "openai", "Provider to use (ollama, gemini, xai, openai, openrouter)")
+	promptFlag := flag.String("prompt", defaultPrompt, "The prompt to send to the LLM")
+	flag.Parse()
+
+	if *promptFlag == "" {
+		fmt.Println("Usage: go run basicQuery.go -provider=<provider> -prompt='your prompt'")
+		fmt.Println("Available providers: ollama, gemini, xai, openai, openrouter")
 		os.Exit(1)
 	}
 
-	// Initialize provider (with improved error handling).
-	provider, err := llm.NewProvider(llm.ProviderConfig{
-		Kind:   llm.ProviderOpenAI,
-		Model:  "gpt-4o-mini", // Fixed: Assuming this is what you meant (common OpenAI model). Change if incorrect.
-		APIKey: apiKey,
-	})
-	check(err, "creating OpenAI provider")
+	kind, model, err := llm.GetProviderKindAndDefaultModel(*providerFlag)
+	if err != nil {
+		fmt.Printf("## 💥💥 Error: Unknown provider '%s'. Available: ollama, gemini, xai, openai, openrouter\n", *providerFlag)
+		os.Exit(1)
+	}
+	l.Info("will call llm.NewProvider(kind:%s, model:%s)", kind, model)
+	// Create provider
+	provider, err := llm.NewProvider(kind, model, l)
+	if err != nil {
+		l.Error("## 💥💥 Error creating provider %s: %v", *providerFlag, err)
+		os.Exit(1)
+	}
 
 	// Define the tool schema (following OpenAI Function Calling spec).
 	weatherTool := llm.Tool{
@@ -108,66 +141,66 @@ func main() {
 		},
 	}
 
-	// Step 1: Create a new conversation with a system prompt.
-	convo, err := llm.NewConversation("You are a helpful weather assistant. Use tools when asked for weather data.")
-	check(err, "starting conversation") // Now properly handles the error.
+	l.Info("🚀 step 1: Creating a new conversation with a system prompt : ")
+	l.Info("🚀 system prompt : %s", defaultSystemPrompt)
+	convo, err := llm.NewConversation(defaultSystemPrompt)
+	check(err, "starting conversation", l) // Now properly handles the error.
 
-	// Add the user's query.
-	err = convo.AddUserMessage("What's the weather right now in San Francisco, CA?")
-	check(err, "adding user message")
+	l.Info("Adding the user's prompt : %s", *promptFlag)
+	err = convo.AddUserMessage(*promptFlag)
+	check(err, "adding user message", l)
 
-	// Step 2: First API call to let the model decide on tools.
+	l.Info("step 2: First API call to let the model decide on tools.")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	slog.Info("Calling LLM for tool decision", "model", "gpt-4o-mini")
+	l.Info("calling LLM for tool decision", "model", model)
 	req := &llm.LLMRequest{
-		Model:      "gpt-4o-mini",        // Consistent with provider config.
 		Messages:   convo.MessagesCopy(), // Use thread-safe copy from Conversation.
 		Tools:      []llm.Tool{weatherTool},
 		ToolChoice: "auto",
 	}
 	resp, err := provider.Query(ctx, req)
-	check(err, "first query")
-
+	check(err, "first query", l)
+	l.Info("LLM returned first response", "resp", resp)
 	// Add the assistant's response (could include tool calls).
 	convo.AddAssistantResponse(resp)
 
 	// Step 3: If tool calls were made, execute them and collect results.
 	if len(resp.ToolCalls) > 0 {
 		for _, tc := range resp.ToolCalls {
-			fmt.Printf("Model requested tool call: %s(%s)\n", tc.Name, string(tc.Arguments))
+			l.Info("LLM returned requested tool call: %s(%s)\n", tc.Name, string(tc.Arguments))
 
 			// Execute the tool: Use the WeatherTool struct (no more undefined function).
-			tool := WeatherTool{} // Instantiate the tool.
+			tool := WeatherTool{l: l} // Instantiate the tool.
 			result, err := tool.Execute(tc.Arguments)
 			if err != nil {
 				result = fmt.Sprintf(`{"error": %q}`, err.Error()) // JSON-safe error response.
-				slog.Warn("Tool execution failed", "tool", tc.Name, "error", err)
+				l.Warn("Tool execution failed", "tool", tc.Name, "error", err)
 			}
-			fmt.Printf("Result of tool call %s(%s): %v\n", tc.Name, string(tc.Arguments), result)
+			l.Info("Result of tool call %s(%s): %v\n", tc.Name, string(tc.Arguments), result)
 
 			// Add the tool's result back to the conversation.
 			convo.AddToolResultMessage(tc.ID, result)
 		}
 
-		// Step 4: Second API call with tool results for the final response.
-		slog.Info("Calling LLM for final answer with tool results")
+		l.Info("step 4: Second API call with tool results for the final response.")
+		l.Info("Calling LLM for final answer with tool results")
 		req2 := &llm.LLMRequest{
 			Model:    "gpt-4o-mini",
 			Messages: convo.MessagesCopy(),    // Safe copy again.
 			Tools:    []llm.Tool{weatherTool}, // Include tools if needed for consistency.
 		}
 		resp2, err := provider.Query(ctx, req2)
-		check(err, "second query")
+		check(err, "second query", l)
 
-		fmt.Println("\nAssistant's Final Response:")
+		l.Info("\nAssistant's Final Response:")
 		fmt.Println(resp2.Text)
 	} else {
 		// No tool calls: Just print the direct response.
-		fmt.Println("\nAssistant's Direct Response (no tool calls):")
+		l.Info("\nAssistant's Direct Response (no tool calls):")
 		fmt.Println(resp.Text)
 	}
 
-	slog.Info("Tool calling example completed successfully")
+	l.Info("Tool calling example completed successfully")
 }
