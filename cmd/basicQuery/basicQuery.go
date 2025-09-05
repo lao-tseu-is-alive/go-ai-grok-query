@@ -17,7 +17,7 @@ import (
 
 // Constants for common defaults
 const (
-	defaultRole        = "You are a helpful bash shell assistant."
+	defaultRole        = "You are a helpful bash shell assistant.Your output should be concise, efficient and easy to read in a bash Linux console."
 	defaultTemperature = 0.2
 	defaultTimeout     = 30 * time.Second
 )
@@ -36,6 +36,7 @@ func main() {
 
 	// Define command-line flags for provider selection and prompt
 	providerFlag := flag.String("provider", "openai", "Provider to use (ollama, gemini, xai, openai, openrouter)")
+	systemRoleFlag := flag.String("system role", defaultRole, "The system role for your assistant, it default to an helpful shell assistant")
 	promptFlag := flag.String("prompt", "", "The prompt to send to the LLM")
 	flag.Parse()
 
@@ -61,7 +62,7 @@ func main() {
 	// Build the request
 	req := &llm.LLMRequest{
 		Messages: []llm.LLMMessage{
-			{Role: llm.RoleSystem, Content: defaultRole},
+			{Role: llm.RoleSystem, Content: *systemRoleFlag},
 			{Role: llm.RoleUser, Content: *promptFlag},
 		},
 		Temperature: defaultTemperature,

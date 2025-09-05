@@ -96,6 +96,7 @@ func main() {
 
 	// Define command-line flags for provider selection and prompt
 	providerFlag := flag.String("provider", "openai", "Provider to use (ollama, gemini, xai, openai, openrouter)")
+	systemRoleFlag := flag.String("system role", defaultSystemPrompt, "The system prompt, it default here to a weather assistant")
 	promptFlag := flag.String("prompt", defaultPrompt, "The prompt to send to the LLM")
 	flag.Parse()
 
@@ -141,8 +142,8 @@ func main() {
 	}
 
 	l.Info("🚀 step 1: Creating a new conversation with a system prompt : ")
-	l.Info("🚀 system prompt : %s", defaultSystemPrompt)
-	convo, err := llm.NewConversation(defaultSystemPrompt)
+	l.Info("🚀 system prompt : %s", *systemRoleFlag)
+	convo, err := llm.NewConversation(*systemRoleFlag)
 	check(err, "starting conversation", l)
 
 	l.Info("Adding the user's prompt : %s", *promptFlag)
@@ -161,7 +162,7 @@ func main() {
 	}
 	resp, err := provider.Query(ctx, req)
 	check(err, "first query", l)
-	l.Info("LLM returned first response", "resp", resp)
+	l.Info("LLM returned first response: %s, finishReason: %s, toolsCalls: %#v", resp.Text, resp.FinishReason, resp.ToolCalls)
 	// Add the assistant's response (could include tool calls).
 	convo.AddAssistantResponse(resp)
 
