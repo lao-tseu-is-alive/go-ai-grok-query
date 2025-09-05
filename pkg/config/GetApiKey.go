@@ -3,8 +3,11 @@ package config
 import (
 	"fmt"
 	"log/slog" // Use slog for optional, structured logging
+	"net/url"
 	"os"
 	"unicode/utf8"
+
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 const minKeyLength = 35
@@ -39,5 +42,28 @@ func GetOpenAIApiKey() (string, error) {
 
 // GetOpenRouterApiKey returns the Gemini API key from the environment.
 func GetOpenRouterApiKey() (string, error) {
-	return getApiKey("OPEN_ROUTER_API_KEY", "OpenRouter")
+	return getApiKey("OPENROUTER_API_KEY", "OpenRouter")
+}
+
+// GetApiBase retrieves a base URL from a given environment variable.
+// It validates that the URL is well-formed. If the environment variable is not set,
+// is empty, or contains an invalid URL, it logs a warning and returns the
+// provided defaultURL as a safe fallback.
+func GetApiBase(envVar, defaultURL string, l golog.MyLogger) string {
+	// 1. Get the URL from the environment variable.
+	envURL := os.Getenv(envVar)
+	// 2. If the environment variable is not set, use the default.
+	if envURL == "" {
+		return defaultURL
+	}
+	// 3. If it is set, validate it.
+	_, err := url.ParseRequestURI(envURL)
+	if err != nil {
+		// If the URL is invalid, log a warning and use the default as a safe fallback.
+		l.Warn("in env %s, got invalid URL %s; falling back to default: %s, err: %s", envVar, envURL, defaultURL, err)
+		return defaultURL
+	}
+	// 4. If it's valid, return the user-provided URL.
+	l.Info("Using custom API base URL from env %s : %s", envVar, envURL)
+	return envURL
 }

@@ -1,3 +1,9 @@
+### Release 0.2.3 :
+##### Configuration and Flexibility:
+Added configuration override of base url of any supported llm via env variables
+##### Code quality and robustness:
+Added unit test and a set of e2e test with a mock server
+
 ### Release 0.2.2 :
 
 ##### Error Handling :

@@ -2,33 +2,23 @@ package llm
 
 import (
 	"fmt"
-	"net/http"
+
+	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 type OpenAIProvider struct {
 	openAICompatibleProvider
 }
 
-func newOpenAIAdapter(cfg ProviderConfig) (Provider, error) {
+func NewOpenAIAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("openai: missing API key")
 	}
 	if cfg.Model == "" {
 		return nil, fmt.Errorf("openai: missing model")
 	}
-	base := cfg.BaseURL
-	if base == "" {
-		base = "https://api.openai.com/v1"
+	if cfg.BaseURL == "" {
+		return nil, fmt.Errorf("openai: missing baseUrl")
 	}
-
-	return &OpenAIProvider{
-		openAICompatibleProvider: openAICompatibleProvider{
-			BaseURL:      base,
-			APIKey:       cfg.APIKey,
-			Model:        cfg.Model,
-			Client:       &http.Client{},
-			ExtraHeaders: cfg.ExtraHeaders,
-			Endpoint:     "/chat/completions",
-		},
-	}, nil
+	return NewOpenAICompatAdapter(cfg, cfg.BaseURL, l)
 }

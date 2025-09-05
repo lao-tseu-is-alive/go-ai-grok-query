@@ -67,7 +67,8 @@ func NewProvider(kind ProviderKind, model string, l golog.MyLogger) (Provider, e
 			l.Info("success retrieving OpenAI ApiKey")
 			cfg.APIKey = key
 		}
-		return NewOpenAICompatAdapter(cfg, "https://api.openai.com/v1", l)
+		cfg.BaseURL = config.GetApiBase("OPENAI_API_BASE", "https://api.openai.com/v1", l)
+		return NewOpenAIAdapter(cfg, l)
 	case ProviderOpenRouter:
 		if cfg.APIKey == "" {
 			key, err := config.GetOpenRouterApiKey()
@@ -77,12 +78,10 @@ func NewProvider(kind ProviderKind, model string, l golog.MyLogger) (Provider, e
 			l.Info("success retrieving OpenRouter ApiKey")
 			cfg.APIKey = key
 		}
-		return NewOpenAICompatAdapter(cfg, "https://openrouter.ai/api/v1", l)
+		cfg.BaseURL = config.GetApiBase("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1", l)
+		return NewOpenRouterAdapter(cfg, l)
 
 	case ProviderGemini:
-		if cfg.BaseURL == "" {
-			cfg.BaseURL = "https://generativelanguage.googleapis.com"
-		}
 		if cfg.APIKey == "" {
 			key, err := config.GetGeminiApiKey()
 			if err != nil {
@@ -91,11 +90,9 @@ func NewProvider(kind ProviderKind, model string, l golog.MyLogger) (Provider, e
 			l.Info("success retrieving Gemini ApiKey")
 			cfg.APIKey = key
 		}
+		cfg.BaseURL = config.GetApiBase("GEMINI_API_BASE", "https://generativelanguage.googleapis.com", l)
 		return NewGeminiAdapter(cfg, l)
 	case ProviderXAI:
-		if cfg.BaseURL == "" {
-			cfg.BaseURL = "https://api.x.ai/v1"
-		}
 		if cfg.APIKey == "" {
 			key, err := config.GetXaiApiKey()
 			if err != nil {
@@ -104,11 +101,10 @@ func NewProvider(kind ProviderKind, model string, l golog.MyLogger) (Provider, e
 			l.Info("success retrieving XAI ApiKey")
 			cfg.APIKey = key
 		}
+		cfg.BaseURL = config.GetApiBase("XAI_API_BASE", "https://api.x.ai/v1", l)
 		return newXaiAdapter(cfg, l) // if using OpenAI-compatible chat/completions semantics
 	case ProviderOllama:
-		if cfg.BaseURL == "" {
-			cfg.BaseURL = "http://localhost:11434"
-		}
+		cfg.BaseURL = config.GetApiBase("OLLAMA_API_BASE", "http://localhost:11434", l)
 		return NewOllamaAdapter(cfg, l)
 
 	default:
@@ -116,8 +112,8 @@ func NewProvider(kind ProviderKind, model string, l golog.MyLogger) (Provider, e
 	}
 }
 
-// isLocalProvider checks if a provider doesn't need an explicit API key.
-func isLocalProvider(kind ProviderKind) bool {
+// IsLocalProvider checks if a provider doesn't need an explicit API key.
+func IsLocalProvider(kind ProviderKind) bool {
 	return kind == ProviderOllama
 }
 

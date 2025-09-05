@@ -1,10 +1,10 @@
-// basicQuery.go
 package main
 
 import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -22,6 +22,13 @@ const (
 	defaultTimeout     = 30 * time.Second
 )
 
+type argumentsToBasicQuery struct {
+	Provider     string
+	Model        string
+	SystemPrompt string
+	UserPrompt   string
+}
+
 func main() {
 	l, err := golog.NewLogger(
 		"simple",
@@ -30,55 +37,82 @@ func main() {
 		"basicQuery",
 	)
 	if err != nil {
-		log.Fatalf("💥💥 error golog.NewLogger error: %v'\n", err)
+		log.Fatalf("💥💥 error creating logger: %v\n", err)
 	}
-	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, from: %s", version.APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
 
 	// Define command-line flags for provider selection and prompt
-	providerFlag := flag.String("provider", "openai", "Provider to use (ollama, gemini, xai, openai, openrouter)")
-	systemRoleFlag := flag.String("system role", defaultRole, "The system role for your assistant, it default to an helpful shell assistant")
-	promptFlag := flag.String("prompt", "", "The prompt to send to the LLM")
+	providerFlag := flag.String("provider", "ollama", "Provider to use (ollama, gemini, xai, openai, openrouter)")
+	modelFlag := flag.String("model", "", "Model to use, depends on chosen provider, leave blank for a default valid choice")
+	systemPromptFlag := flag.String("system", defaultRole, "The system role for your assistant, it default to an helpful shell assistant")
+	userPromptFlag := flag.String("prompt", "", "The prompt to send to the LLM")
 	flag.Parse()
 
-	if *promptFlag == "" {
+	if *userPromptFlag == "" {
 		fmt.Println("Usage: go run basicQuery.go -provider=<provider> -prompt='your prompt'")
 		fmt.Println("Available providers: ollama, gemini, xai, openai, openrouter")
 		os.Exit(1)
 	}
 	l.Info("you asked for provider: %s", *providerFlag)
-	kind, model, err := llm.GetProviderKindAndDefaultModel(*providerFlag)
-	if err != nil {
-		fmt.Printf("## 💥💥 Error: Unknown provider '%s'. Available: ollama, gemini, xai, openai, openrouter\n", *providerFlag)
-		os.Exit(1)
+
+	params := argumentsToBasicQuery{
+		Provider:     *providerFlag,
+		Model:        *modelFlag,
+		SystemPrompt: *systemPromptFlag,
+		UserPrompt:   *userPromptFlag,
 	}
 
-	// Create provider
+	if err := run(l, params, os.Stdout); err != nil {
+		l.Error("💥💥 application error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// run now relies on the flags having been parsed by main.
+func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
+	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, from: %s", version.APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
+
+	if params.UserPrompt == "" {
+		return fmt.Errorf("prompt flag cannot be empty. Usage: -prompt='your question'")
+	}
+
+	l.Info("you asked for provider: %s", params.Provider)
+	kind, defaultModel, err := llm.GetProviderKindAndDefaultModel(params.Provider)
+	if err != nil {
+		return fmt.Errorf("unknown provider '%s': %w", params.Provider, err)
+	}
+
+	model := defaultModel
+	if params.Model != "" {
+		model = params.Model
+		l.Info("using model override from flag: %s", model)
+	}
+
 	l.Info("will call llm.NewProvider(kind:%s, model:%s)", kind, model)
 	provider, err := llm.NewProvider(kind, model, l)
 	if err != nil {
-		log.Fatalf("## 💥💥 Error creating provider %s: %v", *providerFlag, err)
+		return fmt.Errorf("error creating provider '%s': %w", params.Provider, err)
 	}
 
-	// Build the request
 	req := &llm.LLMRequest{
 		Messages: []llm.LLMMessage{
-			{Role: llm.RoleSystem, Content: *systemRoleFlag},
-			{Role: llm.RoleUser, Content: *promptFlag},
+			{Role: llm.RoleSystem, Content: params.SystemPrompt},
+			{Role: llm.RoleUser, Content: params.UserPrompt},
 		},
 		Temperature: defaultTemperature,
 		Stream:      false,
 	}
 
-	// Apply timeout and query
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	l.Info("Sending prompt to %s LLM...\n", kind)
 	resp, err := provider.Query(ctx, req)
 	if err != nil {
-		log.Fatalf("## 💥💥 Error querying LLM: %v", err)
+		return fmt.Errorf("error querying LLM: %w", err)
 	}
 
-	fmt.Println("\nLLM Response:")
-	fmt.Println(resp.Text)
+	fmt.Fprintln(out, "\nLLM Response:")
+	fmt.Fprintln(out, resp.Text)
+
+	return nil
 }

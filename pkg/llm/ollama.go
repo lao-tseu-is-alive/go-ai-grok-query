@@ -52,9 +52,11 @@ func NewOllamaAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.Model == "" {
 		return nil, fmt.Errorf("ollama: missing model")
 	}
-	baseURL := FirstNonEmpty(cfg.BaseURL, "http://localhost:11434")
+	if cfg.BaseURL == "" {
+		return nil, fmt.Errorf("ollama: missing baseURl")
+	}
 	return &OllamaProvider{
-		BaseURL: baseURL,
+		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
 		Client:  &http.Client{Timeout: 30 * time.Second}, // Add timeout to prevent hangs
 		l:       l,

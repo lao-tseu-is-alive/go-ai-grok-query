@@ -60,7 +60,7 @@ The application uses environment variables to manage API keys. Create a `.env` f
 OPENAI_API_KEY="sk-..."
 
 # For OpenRouter.ai
-OPEN_ROUTER_API_KEY="sk-or-..."
+OPENROUTER_API_KEY="sk-or-..."
 
 # For Google Gemini
 GEMINI_API_KEY="..."

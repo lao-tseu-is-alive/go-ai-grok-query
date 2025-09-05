@@ -54,9 +54,11 @@ func NewGeminiAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.Model == "" {
 		return nil, errors.New("gemini: model required")
 	}
-	baseURL := FirstNonEmpty(cfg.BaseURL, "https://generativelanguage.googleapis.com")
+	if cfg.BaseURL == "" {
+		return nil, fmt.Errorf("gemini: missing baseURl")
+	}
 	return &GeminiProvider{
-		BaseURL: baseURL,
+		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
 		Model:   cfg.Model,
 		Client:  &http.Client{Timeout: 30 * time.Second},
@@ -95,10 +97,13 @@ func (g *GeminiProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 		"x-goog-api-key": []string{g.APIKey},
 	}
 
+	g.l.Debug("about to send request to %s", g.BaseURL)
 	responseData, rawResp, err := HttpRequest[geminiRequest, geminiResponse](ctx, g.Client, url, headers, payload, g.l)
 	if err != nil {
+		g.l.Warn("got error during HttpRequest: %q", err)
 		return nil, fmt.Errorf("gemini request failed: %w (raw body: %s)", err, string(rawResp))
 	}
+	g.l.Debug("successful HttpRequest, rawbody: %s", string(rawResp))
 
 	llmResp := &LLMResponse{
 		Raw: json.RawMessage(rawResp),

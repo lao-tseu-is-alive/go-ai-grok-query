@@ -2,7 +2,6 @@ package llm
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
@@ -18,19 +17,8 @@ func newXaiAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.Model == "" {
 		return nil, fmt.Errorf("xai: missing model")
 	}
-	base := cfg.BaseURL
-	if base == "" {
-		base = "https://api.x.ai/v1"
+	if cfg.BaseURL == "" {
+		return nil, fmt.Errorf("xai: missing baseURl")
 	}
-	return &XaiProvider{
-		openAICompatibleProvider: openAICompatibleProvider{
-			BaseURL:      base,
-			APIKey:       cfg.APIKey,
-			Model:        cfg.Model,
-			Client:       &http.Client{},
-			ExtraHeaders: cfg.ExtraHeaders,
-			Endpoint:     "/chat/completions",
-			l:            l,
-		},
-	}, nil
+	return NewOpenAICompatAdapter(cfg, cfg.BaseURL, l)
 }
