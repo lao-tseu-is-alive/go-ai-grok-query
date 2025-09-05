@@ -4,7 +4,7 @@
 Added better log handling to debug errors in requests.
 
 ##### Configuration and Flexibility:
-Added provider flag with easy selection of a default model
+Added provider flag with easy selection of a default model, added system prompt flag
 
 ##### Code quality and readability:
 refactored config package to remove code duplication.
