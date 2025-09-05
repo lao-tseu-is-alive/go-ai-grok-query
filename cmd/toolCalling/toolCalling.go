@@ -110,8 +110,7 @@ func main() {
 		fmt.Printf("## 💥💥 Error: Unknown provider '%s'. Available: ollama, gemini, xai, openai, openrouter\n", *providerFlag)
 		os.Exit(1)
 	}
-	l.Info("will call llm.NewProvider(kind:%s, model:%s)", kind, model)
-	// Create provider
+	l.Info("will create provider llm.NewProvider(kind:%s, model:%s)", kind, model)
 	provider, err := llm.NewProvider(kind, model, l)
 	if err != nil {
 		l.Error("## 💥💥 Error creating provider %s: %v", *providerFlag, err)
@@ -144,7 +143,7 @@ func main() {
 	l.Info("🚀 step 1: Creating a new conversation with a system prompt : ")
 	l.Info("🚀 system prompt : %s", defaultSystemPrompt)
 	convo, err := llm.NewConversation(defaultSystemPrompt)
-	check(err, "starting conversation", l) // Now properly handles the error.
+	check(err, "starting conversation", l)
 
 	l.Info("Adding the user's prompt : %s", *promptFlag)
 	err = convo.AddUserMessage(*promptFlag)

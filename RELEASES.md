@@ -6,6 +6,9 @@ Added better log handling to debug errors in requests.
 ##### Configuration and Flexibility:
 Added provider flag with easy selection of a default model
 
+##### Code quality and readability:
+refactored config package to remove code duplication.
+
 ### Release 0.2.1 :
 
 ##### Error Handling & Library-Neutrality:
