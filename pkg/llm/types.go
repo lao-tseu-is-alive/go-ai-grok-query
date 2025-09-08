@@ -97,8 +97,11 @@ type Delta struct {
 }
 
 type ModelInfo struct {
-	Name        string `json:"name"`
-	ContextSize int    `json:"context_size,omitempty"`
+	Name          string `json:"name"`
+	Family        string `json:"family,omitempty"`
+	Size          int64  `json:"size,omitempty"`
+	ParameterSize string `json:"parameter_size,omitempty"`
+	ContextSize   int    `json:"context_size,omitempty"`
 	// Feature flags
 	SupportsTools      bool `json:"supports_tools,omitempty"`
 	SupportsStreaming  bool `json:"supports_streaming,omitempty"`

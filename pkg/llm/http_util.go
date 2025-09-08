@@ -62,3 +62,46 @@ func HttpRequest[ReqT any, RespT any](
 
 	return &responsePayload, respBody, nil
 }
+
+// httpGetRequest performs a generic HTTP GET request and unmarshals the response.
+func httpGetRequest[RespT any](
+	ctx context.Context,
+	client *http.Client,
+	url string,
+	headers http.Header,
+	l golog.MyLogger,
+) (*RespT, error) {
+	// 1. Create and configure the HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new GET request: %w", err)
+	}
+	httpReq.Header = headers
+
+	// 2. Execute the request
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		l.Warn("failed http GET request: %s %s", httpReq.Method, httpReq.URL)
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 3. Read and check the response
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read GET response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		l.Warn("non-2xx status code [%d] doing GET: %s, body:%q", resp.StatusCode, httpReq.URL, string(respBody))
+		return nil, fmt.Errorf("received non-2xx status code %d", resp.StatusCode)
+	}
+
+	// 4. Unmarshal the successful response
+	var responsePayload RespT
+	if err := json.Unmarshal(respBody, &responsePayload); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal GET response: %w", err)
+	}
+
+	return &responsePayload, nil
+}

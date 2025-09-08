@@ -170,9 +170,34 @@ func (p *openAICompatibleProvider) Stream(ctx context.Context, req *LLMRequest, 
 	return nil, fmt.Errorf("streaming not implemented")
 }
 
+// ListModels fetches the list of available models from an OpenAI-compatible API.
 func (p *openAICompatibleProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	// Optional: GET /v1/models to enumerate models and set feature flags
-	// Many orgs restrict visibility; consider deferring implementation or making it configurable.
+	url := p.BaseURL + "/models"
+	headers := http.Header{
+		"Authorization": []string{"Bearer " + p.APIKey},
+	}
+	for key, value := range p.ExtraHeaders {
+		headers.Set(key, value)
+	}
 
-	return nil, fmt.Errorf("ListModels not implemented")
+	type modelsResponse struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+
+	resp, err := httpGetRequest[modelsResponse](ctx, p.Client, url, headers, p.l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list models from %s: %w", p.BaseURL, err)
+	}
+
+	modelInfos := make([]ModelInfo, len(resp.Data))
+	for i, model := range resp.Data {
+		modelInfos[i] = ModelInfo{
+			Name: model.ID,
+			// Other fields like context size could be populated if the API provides them.
+		}
+	}
+
+	return modelInfos, nil
 }

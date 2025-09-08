@@ -125,14 +125,6 @@ func (g *GeminiProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 	return llmResp, nil
 }
 
-func (g *GeminiProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
-	return nil, errors.New("gemini streaming not implemented")
-}
-
-func (g *GeminiProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	return nil, errors.New("gemini list models not implemented")
-}
-
 // ToGeminiContents converts LLM messages to Gemini's content format.
 func ToGeminiContents(msgs []LLMMessage) []map[string]any {
 	out := make([]map[string]any, 0, len(msgs))
@@ -156,4 +148,33 @@ func FirstSystemMessage(msgs []LLMMessage) string {
 		}
 	}
 	return ""
+}
+
+func (g *GeminiProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
+	return nil, errors.New("gemini streaming not implemented")
+}
+
+func (g *GeminiProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	url := g.BaseURL + "/v1beta/models"
+	headers := http.Header{
+		"x-goog-api-key": []string{g.APIKey},
+	}
+
+	type geminiModelsResponse struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+
+	resp, err := httpGetRequest[geminiModelsResponse](ctx, g.Client, url, headers, g.l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list gemini models: %w", err)
+	}
+
+	modelInfos := make([]ModelInfo, len(resp.Models))
+	for i, model := range resp.Models {
+		modelInfos[i] = ModelInfo{Name: model.Name}
+	}
+
+	return modelInfos, nil
 }

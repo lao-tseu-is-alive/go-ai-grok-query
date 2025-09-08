@@ -1,11 +1,13 @@
 package llm
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid" // Add this import for tool ID generation
@@ -45,6 +47,26 @@ type ollamaResponse struct {
 	} `json:"message"`
 	Done  bool   `json:"done"`
 	Error string `json:"error,omitempty"`
+}
+
+// OllamaModelDetails provides details about a model.
+type OllamaModelDetails struct {
+	ParentModel       string   `json:"parent_model"`
+	Format            string   `json:"format"`
+	Family            string   `json:"family"`
+	Families          []string `json:"families"`
+	ParameterSize     string   `json:"parameter_size"`
+	QuantizationLevel string   `json:"quantization_level"`
+}
+
+// OllamaListModelResponse is a single model description in [ListResponse].
+type OllamaListModelResponse struct {
+	Name       string             `json:"name"`
+	Model      string             `json:"model"`
+	ModifiedAt time.Time          `json:"modified_at"`
+	Size       int64              `json:"size"`
+	Digest     string             `json:"digest"`
+	Details    OllamaModelDetails `json:"details,omitempty"`
 }
 
 // NewOllamaAdapter creates a new OllamaProvider from config.
@@ -117,5 +139,36 @@ func (o *OllamaProvider) Stream(ctx context.Context, req *LLMRequest, onDelta fu
 }
 
 func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	return nil, errors.New("ollama list models not implemented") // Stub
+	url := o.BaseURL + "/api/tags"
+	headers := http.Header{} // Ollama doesn't require auth headers
+
+	type ollamaTagsResponse struct {
+		Models []OllamaListModelResponse
+	}
+
+	resp, err := httpGetRequest[ollamaTagsResponse](ctx, o.Client, url, headers, o.l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ollama models: %w", err)
+	}
+
+	modelInfos := make([]ModelInfo, len(resp.Models))
+	for i, model := range resp.Models {
+		o.l.Info("ollama model info %s: %#v", model.Name, model)
+		modelInfos[i] = ModelInfo{
+			Name:               model.Name,
+			Family:             model.Details.Family,
+			Size:               model.Size,
+			ParameterSize:      model.Details.ParameterSize,
+			ContextSize:        0,
+			SupportsTools:      false,
+			SupportsStreaming:  false,
+			SupportsJSONMode:   false,
+			SupportsStructured: false,
+		}
+	}
+	slices.SortStableFunc(modelInfos, func(i, j ModelInfo) int {
+		return cmp.Compare(i.Name, j.Name)
+	})
+
+	return modelInfos, nil
 }
