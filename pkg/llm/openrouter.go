@@ -20,5 +20,5 @@ func NewOpenRouterAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("openrouter: missing baseURl")
 	}
-	return NewOpenAICompatAdapter(cfg, cfg.BaseURL, l)
+	return NewOpenAICompatAdapter(cfg, ProviderOpenRouter, cfg.BaseURL, l)
 }

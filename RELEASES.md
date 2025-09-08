@@ -1,3 +1,6 @@
+### Release 0.2.5 :
+Added main model capabilities for ollama, xai and openai provider
+
 ### Release 0.2.4 :
 ##### Configuration and Flexibility:
 Added usage info, and model listing by provider

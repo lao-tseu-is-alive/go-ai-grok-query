@@ -104,6 +104,8 @@ type ModelInfo struct {
 	ContextSize   int    `json:"context_size,omitempty"`
 	// Feature flags
 	SupportsTools      bool `json:"supports_tools,omitempty"`
+	SupportsThinking   bool `json:"supports_thinking,omitempty"`
+	SupportsInputImage bool `json:"supports_input_image,omitempty"`
 	SupportsStreaming  bool `json:"supports_streaming,omitempty"`
 	SupportsJSONMode   bool `json:"supports_json_mode,omitempty"`
 	SupportsStructured bool `json:"supports_structured,omitempty"`

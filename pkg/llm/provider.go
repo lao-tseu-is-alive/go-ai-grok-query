@@ -124,8 +124,10 @@ func GetProviderKindAndDefaultModel(kind string) (p ProviderKind, defaultModel s
 	case "gemini":
 		return ProviderGemini, "gemini-2.5-flash", nil
 	case "xai":
+		//standard price per 1M tokens [2025/09/08] grok3-3-mini input:$0.30, cached-input:$0.075,	output:$0.50, Live Search :$25.00/ 1K sources
 		return ProviderXAI, "grok-3-mini", nil
 	case "openai":
+		//standard price per 1M tokens [2025/09/08] gpt-4o-mini	input:$0.15, cached-input:$0.075,	output:$0.60
 		return ProviderOpenAI, "gpt-4o-mini", nil
 	case "openrouter":
 		return ProviderOpenRouter, "qwen/qwen3-4b:free", nil

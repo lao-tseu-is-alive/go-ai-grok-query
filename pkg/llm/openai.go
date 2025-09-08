@@ -20,5 +20,5 @@ func NewOpenAIAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("openai: missing baseUrl")
 	}
-	return NewOpenAICompatAdapter(cfg, cfg.BaseURL, l)
+	return NewOpenAICompatAdapter(cfg, ProviderOpenAI, cfg.BaseURL, l)
 }

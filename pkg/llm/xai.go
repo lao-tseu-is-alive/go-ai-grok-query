@@ -20,5 +20,5 @@ func newXaiAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("xai: missing baseURl")
 	}
-	return NewOpenAICompatAdapter(cfg, cfg.BaseURL, l)
+	return NewOpenAICompatAdapter(cfg, ProviderXAI, cfg.BaseURL, l)
 }
