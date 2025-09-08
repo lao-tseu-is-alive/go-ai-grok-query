@@ -1,3 +1,7 @@
+### Release 0.2.4 :
+##### Configuration and Flexibility:
+Added usage info, and model listing by provider
+
 ### Release 0.2.3 :
 ##### Configuration and Flexibility:
 Added configuration override of base url of any supported llm via env variables
