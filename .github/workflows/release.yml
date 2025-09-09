@@ -43,6 +43,14 @@ jobs:
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o basicQuery-linux-arm64 ./cmd/basicQuery/basicQuery.go
           GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o basicQuery-windows-arm64.exe ./cmd/basicQuery/basicQuery.go
           GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o basicQuery-darwin-arm64 ./cmd/basicQuery/basicQuery.go
+          
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o askToAllModels-linux-amd64 ./cmd/askToAllModels/askToAllModels.go 
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o askToAllModels-windows-amd64.exe ./cmd/askToAllModels/askToAllModels.go
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o askToAllModels-darwin-amd64 ./cmd/askToAllModels/askToAllModels.go
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o askToAllModels-linux-arm64 ./cmd/askToAllModels/askToAllModels.go
+          GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o askToAllModels-windows-arm64.exe ./cmd/askToAllModels/askToAllModels.go
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o askToAllModels-darwin-arm64 ./cmd/askToAllModels/askToAllModels.go
+          
 
       - name: Create Archives
         run: |
@@ -52,10 +60,17 @@ jobs:
           tar -czvf basicQuery-linux-arm64.tar.gz basicQuery-linux-arm64
           tar -czvf basicQuery-darwin-arm64.tar.gz basicQuery-darwin-arm64
           zip basicQuery-windows-arm64.zip basicQuery-windows-arm64.exe
+          tar -czvf askToAllModels-linux-amd64.tar.gz askToAllModels-linux-amd64
+          tar -czvf askToAllModels-darwin-amd64.tar.gz askToAllModels-darwin-amd64
+          zip askToAllModels-windows-amd64.zip askToAllModels-windows-amd64.exe
+          tar -czvf askToAllModels-linux-arm64.tar.gz askToAllModels-linux-arm64
+          tar -czvf askToAllModels-darwin-arm64.tar.gz askToAllModels-darwin-arm64
+          zip askToAllModels-windows-arm64.zip askToAllModels-windows-arm64.exe
 
       - name: Calculate Sha256 hash
         run: |
           sha256sum basicQuery-* > SHA256.txt
+          sha256sum askToAllModels-* >> SHA256.txt
 
       - name: Upload Release Asset for Linux/macOS
         uses: softprops/action-gh-release@v2.2.2
@@ -68,6 +83,12 @@ jobs:
             basicQuery-linux-arm64.tar.gz
             basicQuery-darwin-arm64.tar.gz
             basicQuery-windows-arm64.zip
+            askToAllModels-linux-amd64.tar.gz
+            askToAllModels-darwin-amd64.tar.gz
+            askToAllModels-windows-amd64.zip
+            askToAllModels-linux-arm64.tar.gz
+            askToAllModels-darwin-arm64.tar.gz
+            askToAllModels-windows-arm64.zip
             SHA256.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub Actions
