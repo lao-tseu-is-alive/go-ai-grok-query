@@ -89,6 +89,25 @@ The `basicQuery` tool sends a single prompt to a specified provider and prints t
 **Syntax:**
 ```sh
 ./basicQuery -provider=<provider> -prompt="Your question" [-system.role="Custom instructions"]
+
+## usage 
+Usage: ./basicQuery -provider=<provider> [options]
+
+A powerful and flexible CLI to query various Large Language Models.
+
+Required Flags:
+  -provider	Provider to use (ollama, gemini, xai, openai, openrouter)
+
+Options for querying:
+  -prompt	The prompt to send to the LLM. Required for querying.
+  -model	Model to use. If blank, a default for the provider is chosen.
+  -system	The system role for the assistant.
+
+Options for listing models:
+  -list-models	Lists available models for the specified provider and exits.
+  -json-output	Use with -list-models to output in JSON format.
+
+
 ```
 
 **Examples:**
