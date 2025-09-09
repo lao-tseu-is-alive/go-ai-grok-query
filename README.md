@@ -48,6 +48,9 @@ You can download ready-to-use executables for Linux, macOS, and Windows directly
 
     # Build the tool-calling example
     go build -o toolCalling ./cmd/toolCalling
+    
+    # Build the new model comparison tool
+    go build -o askToAllModels ./cmd/askToAllModels
     ```
 
 ## 🔑 Configuration
@@ -128,7 +131,26 @@ export OPENAI_API_KEY="sk-..."
 4.  This result is sent back to the LLM.
 5.  The LLM generates the final, user-friendly response.
 
-### 3. Helper Scripts
+
+### 3. Model Comparison  (`askToAllModels`)
+
+The `askToAllModels` is a new tool sends a single query to all available models of a given provider and saves the full responses to a JSON file for easy comparison.
+
+**Syntax:**
+```sh
+./askToAllModels -provider=<provider> -prompt="Your question" [-system="Custom instructions"] [-temperature=0.2]
+```
+
+
+**Example:**
+This command will query all ollama models and save the results to model_comparison_results.json.
+
+```sh
+./askToAllModels -provider=ollama -system='you are an honest and helpful assistant' -prompt='Tell me about your strengths and weaknesses' -temperature=0.2
+```
+
+
+### 4. Helper Scripts
 
 The `scripts/` directory contains convenient wrappers for common tasks.
 
