@@ -19,6 +19,7 @@ import (
 
 // Constants for common defaults
 const (
+	APP                = "basicQuery"
 	defaultRole        = "You are a helpful bash shell assistant.Your output should be concise, efficient and easy to read in a bash Linux console."
 	defaultTemperature = 0.2
 	defaultTimeout     = 30 * time.Second
@@ -50,8 +51,8 @@ func main() {
 	l, err := golog.NewLogger(
 		"simple",
 		config.GetLogWriterFromEnvOrPanic("stderr"),
-		config.GetLogLevelFromEnvOrPanic(golog.DebugLevel),
-		"basicQuery",
+		config.GetLogLevelFromEnvOrPanic(golog.InfoLevel),
+		APP,
 	)
 	if err != nil {
 		log.Fatalf("💥💥 error creating logger: %v\n", err)
@@ -111,7 +112,7 @@ func main() {
 		UserPrompt:   *userPromptFlag,
 	}
 
-	if err := run(l, provider, params, os.Stdout); err != nil {
+	if err := run(l, params, os.Stdout); err != nil {
 		l.Error("💥💥 application error: %v\n", err)
 		os.Exit(1)
 	}
@@ -144,16 +145,24 @@ func handleListModels(l golog.MyLogger, provider llm.Provider, jsonOutput bool) 
 }
 
 // run is now responsible for validating the model and executing the query.
-func run(l golog.MyLogger, provider llm.Provider, params argumentsToBasicQuery, out io.Writer) error {
-	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, from: %s", version.APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
+func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
+	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, git: %s", APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
 
-	_, defaultModel, _ := llm.GetProviderKindAndDefaultModel(params.Provider)
+	kind, defaultModel, err := llm.GetProviderKindAndDefaultModel(params.Provider)
+	if err != nil {
+		return fmt.Errorf("💥💥  error getting provider %s kind :%v", params.Provider, err)
+	}
 	modelToUse := defaultModel
 	if params.Model != "" {
 		modelToUse = params.Model
 		l.Info("using model override from flag: %s", modelToUse)
 	} else {
 		l.Info("using default model for provider: %s", modelToUse)
+	}
+
+	provider, err := llm.NewProvider(kind, modelToUse, l)
+	if err != nil {
+		return fmt.Errorf("💥💥 error creating provider '%s': %v", params.Provider, err)
 	}
 
 	// 4. Add model validation logic before querying

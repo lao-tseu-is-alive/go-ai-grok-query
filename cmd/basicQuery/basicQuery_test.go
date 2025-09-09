@@ -16,7 +16,6 @@ import (
 
 const (
 	DEBUG                           = true
-	APP                             = "testBasicQuery"
 	assertCorrectStatusCodeExpected = "expected status code should be returned"
 	fmtErrNewRequest                = "### ERROR http.NewRequest %s on [%s] error is :%v\n"
 	fmtTraceInfo                    = "### %s : %s on %s\n"

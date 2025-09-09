@@ -263,7 +263,7 @@ func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 				modelInfos = append(modelInfos, tempModelInfo)
 			}
 		} else {
-			o.l.Warn("ollama model embedding %s discarded: %#v", model.Name, model)
+			o.l.Debug("ollama model embedding %s discarded: %#v", model.Name, model)
 		}
 	}
 
