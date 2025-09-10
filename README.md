@@ -102,6 +102,8 @@ Options for querying:
   -prompt	The prompt to send to the LLM. Required for querying.
   -model	Model to use. If blank, a default for the provider is chosen.
   -system	The system role for the assistant.
+  -temperature	The temperature of the model. Increasing the temperature will make the model answer more creatively(value range 0.0 - 2.0).
+  -stream	Enable streaming the response.
 
 Options for listing models:
   -list-models	Lists available models for the specified provider and exits.

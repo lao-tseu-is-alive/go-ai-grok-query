@@ -1,3 +1,12 @@
+### Release 0.2.9 :
+ + Implemented streaming for all providers type
+ + Added temperature parameter to basicQuery
+ + Added stream parameter to basicQuery
+
+### Release 0.2.8 :
+Added the CLI askToAllModels new tool that can send a single query to all available models of a given provider and saves the full responses to a JSON file for easy comparison.
+
+
 ### Release 0.2.5 :
 Added main model capabilities for ollama, xai and openai provider
 
