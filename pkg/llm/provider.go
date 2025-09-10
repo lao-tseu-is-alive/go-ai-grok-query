@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
@@ -136,4 +137,22 @@ func GetProviderKindAndDefaultModel(kind string) (p ProviderKind, defaultModel s
 		return "", "", fmt.Errorf("provider kind %s is not available", kind)
 
 	}
+}
+
+// GetModelsList retrieves a slice of the models name available for a given provider
+func GetModelsList(l golog.MyLogger, provider Provider, defaultTimeout time.Duration) ([]string, error) {
+	l.Info("Fetching available models...")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	models, err := provider.ListModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching models from provider: %w", err)
+	}
+	modelNames := make([]string, 0, len(models))
+
+	for _, m := range models {
+		modelNames = append(modelNames, m.Name)
+	}
+	return modelNames, nil
 }

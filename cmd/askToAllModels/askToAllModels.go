@@ -100,23 +100,6 @@ func main() {
 	}
 }
 
-func getModelsName(l golog.MyLogger, provider llm.Provider) ([]string, error) {
-	l.Info("Fetching available models...")
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
-	models, err := provider.ListModels(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching models from provider: %w", err)
-	}
-	modelNames := make([]string, 0, len(models))
-
-	for _, m := range models {
-		modelNames = append(modelNames, m.Name)
-	}
-	return modelNames, nil
-}
-
 func run(l golog.MyLogger, params argumentsToAskToAll) error {
 	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, git: %s", APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
 	kind, defModel, err := llm.GetProviderKindAndDefaultModel(params.Provider)
@@ -128,7 +111,7 @@ func run(l golog.MyLogger, params argumentsToAskToAll) error {
 	if err != nil {
 		return fmt.Errorf("💥💥 error creating provider '%s': %v", params.Provider, err)
 	}
-	modelsList, err := getModelsName(l, provider)
+	modelsList, err := llm.GetModelsList(l, provider, defaultTimeout)
 	if err != nil {
 		return fmt.Errorf("error getting list of models for provider %s. err: %w", params.Provider, err)
 	}

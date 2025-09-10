@@ -181,24 +181,13 @@ func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
 
 	// 4. Add model validation logic before querying
 	l.Info("Validating model '%s' with provider...", modelToUse)
-	ctxValidate, cancelValidate := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancelValidate()
-
-	availableModels, err := provider.ListModels(ctxValidate)
+	modelsList, err := llm.GetModelsList(l, provider, defaultTimeout)
 	if err != nil {
-		// If the list endpoint fails, we log a warning but proceed cautiously.
-		l.Warn("Could not validate model with provider (ListModels failed: %v). Proceeding with query anyway.", err)
-	} else {
-		// Check if the desired model exists in the list returned by the provider.
-		isValid := slices.ContainsFunc(availableModels, func(m llm.ModelInfo) bool {
-			// Some providers prefix with "models/", so we check for both formats.
-			return m.Name == modelToUse || m.Name == "models/"+modelToUse
-		})
-
-		if !isValid {
-			return fmt.Errorf("model '%s' is not available for this provider. Use -list-models to see valid options", modelToUse)
-		}
-		l.Info("✅ Model '%s' is valid.", modelToUse)
+		return fmt.Errorf("error getting list of models for provider %s. err: %w", params.Provider, err)
+	}
+	// Check if the desired model exists in the list returned by the provider.
+	if !slices.Contains(modelsList, modelToUse) {
+		return fmt.Errorf("model '%s' is not available for this provider. Use -list-models to see valid options", modelToUse)
 	}
 	temperature := llm.Clamp(params.Temperature, 0.0, 2.0)
 
