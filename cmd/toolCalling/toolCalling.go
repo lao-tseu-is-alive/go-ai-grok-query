@@ -96,7 +96,7 @@ func main() {
 
 	// Define command-line flags for provider selection and prompt
 	providerFlag := flag.String("provider", "openai", "Provider to use (ollama, gemini, xai, openai, openrouter)")
-	systemRoleFlag := flag.String("system role", defaultSystemPrompt, "The system prompt, it default here to a weather assistant")
+	systemRoleFlag := flag.String("system", defaultSystemPrompt, "The system prompt, it default here to a weather assistant")
 	promptFlag := flag.String("prompt", defaultPrompt, "The prompt to send to the LLM")
 	flag.Parse()
 

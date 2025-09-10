@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LLM Model Capabilities Configuration",
+  "description": "A configuration file defining the capabilities of various models for different providers.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "A reference to the schema used to validate this file."
+    }
+  },
+  "patternProperties": {
+    "^(?!\\$schema$)[a-zA-Z0-9]+$": {
+      "type": "object",
+      "description": "Holds the configuration for a specific provider (e.g., 'ollama', 'openai').",
+      "properties": {
+        "models": {
+          "type": "array",
+          "description": "A list of specific models and their capabilities.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The unique identifier for the model (e.g., 'gemma3:latest', 'gpt-4o-mini')."
+              },
+              "contextSize": {
+                "type": "integer",
+                "description": "The maximum context window size in tokens.",
+                "minimum": 0
+              },
+              "supportsTools": {
+                "type": "boolean",
+                "description": "Indicates if the model supports tool calling (function calling)."
+              },
+              "supportsThinking": {
+                "type": "boolean",
+                "description": "Indicates if the model supports an internal 'thinking' or 'reasoning' step."
+              },
+              "supportsInputImage": {
+                "type": "boolean",
+                "description": "Indicates if the model can process image inputs (multimodal)."
+              }
+            },
+            "required": ["name", "contextSize"]
+          }
+        }
+      },
+      "required": ["models"]
+    }
+  },
+  "additionalProperties": false
+}
