@@ -3,6 +3,7 @@
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_go-ai-llm-query&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_go-ai-llm-query)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_go-ai-llm-query&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_go-ai-llm-query)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_go-ai-llm-query&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_go-ai-llm-query)
+[![Go-Test](https://github.com/lao-tseu-is-alive/go-ai-llm-query/actions/workflows/go-test.yml/badge.svg)](https://github.com/lao-tseu-is-alive/go-ai-llm-query/actions/workflows/go-test.yml)
 [![Go version](https://img.shields.io/badge/go-1.22+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/lao-tseu-is-alive/go-ai-llm-query)](https://github.com/lao-tseu-is-alive/go-ai-llm-query/releases/latest)
