@@ -63,7 +63,7 @@ func HttpRequest[ReqT any, RespT any](
 	return &responsePayload, respBody, nil
 }
 
-// httpGetRequest performs a generic HTTP GET request and unmarshals the response.
+// httpGetRequest performs a generic HTTP GET request and unmarshal the response.
 func httpGetRequest[RespT any](
 	ctx context.Context,
 	client *http.Client,
@@ -91,7 +91,7 @@ func httpGetRequest[RespT any](
 	if err != nil {
 		return nil, fmt.Errorf("failed to read GET response body: %w", err)
 	}
-
+	l.Debug("GET: %s, body:\n%q\n", resp.StatusCode, httpReq.URL, string(respBody))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		l.Warn("non-2xx status code [%d] doing GET: %s, body:%q", resp.StatusCode, httpReq.URL, string(respBody))
 		return nil, fmt.Errorf("received non-2xx status code %d", resp.StatusCode)

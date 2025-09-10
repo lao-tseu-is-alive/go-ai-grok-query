@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -42,6 +41,17 @@ func mockApiServer() *httptest.Server {
 			http.NotFound(w, r)
 		}
 	})
+	//list models for openai compatible
+	handler.HandleFunc("/models", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"object": "list","data": [{"id":"gpt-4o-mini"},{"id":"qwen/qwen3-4b:free"},{"id":"grok-3-mini"},{"id":"grok-3-mini"}]}`)
+	})
+	//list models for ollama
+	handler.HandleFunc("/api/tags", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"models":[{"name":"qwen3:latest"}]}`)
+	})
+	handler.HandleFunc("/v1beta/models", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"models":[{"name":"gemini-test"}]}`)
+	})
 	return httptest.NewServer(handler)
 }
 
@@ -49,12 +59,6 @@ func Test_run(t *testing.T) {
 	// Start the mock server once for all tests
 	server := mockApiServer()
 	defer server.Close()
-
-	// Create a null logger to keep test output clean
-	l, err := golog.NewLogger("simple", io.Discard, golog.ErrorLevel, "test")
-	if err != nil {
-		log.Fatalf("error creating logger for test: %v", err)
-	}
 
 	// Define test cases for each provider
 	tests := []struct {
