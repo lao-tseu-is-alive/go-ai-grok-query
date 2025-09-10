@@ -1,0 +1,45 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go-Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '^1.25'
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      env:
+        PORT: 9999
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        JWT_ISSUER_ID: ${{ secrets.JWT_ISSUER_ID }}
+        JWT_CONTEXT_KEY: ${{ secrets.JWT_CONTEXT_KEY }}
+        JWT_DURATION_MINUTES: 240
+        JWT_AUTH_URL: ${{ secrets.JWT_AUTH_URL }}
+        ADMIN_USER: ${{ secrets.ADMIN_USER }}
+        ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+        ADMIN_ID: ${{ secrets.ADMIN_ID }}
+      run: go test -coverprofile coverage.out -v ./...
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.out
