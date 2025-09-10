@@ -21,25 +21,88 @@
         "deepcoder:latest": { "context_size": 131072 },
         "deepcoder:1.5b":  {"context_size": 131072 },
         "deepseek-r1:latest": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "deepseek-r1:1.5b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "deepseek-r1:7b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "deepseek-r1:8b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "deepseek-r1:14b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "deepseek-r1:32b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "deepseek-r1:70b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+
         "devstral:latest": { "context_size": 131072, "supports_tools": true },
+        "devstral:24b": { "context_size": 131072, "supports_tools": true },
+
         "dolphin3:latest": { "context_size": 131072 },
+
         "exaone-deep:latest": { "context_size": 32768 },
         "falcon3:latest": { "context_size": 32768 },
+
         "gemma3:latest": { "context_size": 131072, "supports_input_image": true },
+        "gemma3:270m": { "context_size": 32768 },
+        "gemma3:1b": { "context_size": 32768 },
+        "gemma3:4b": { "context_size": 131072, "supports_input_image": true },
+        "gemma3:12b": { "context_size": 131072, "supports_input_image": true },
+        "gemma3:27b": { "context_size": 131072, "supports_input_image": true },
+
         "gpt-oss:latest": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "gpt-oss:20b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "gpt-oss:120b": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+
         "llama3.1:latest": { "context_size": 131072, "supports_tools": true },
+        "llama3.1:8b": { "context_size": 131072, "supports_tools": true },
+        "llama3.1:70b": { "context_size": 131072, "supports_tools": true },
+        "llama3.1:405b": { "context_size": 131072, "supports_tools": true },
+
+        "llama3.2:latest": { "context_size": 131072, "supports_tools": true },
+        "llama3.2:1b": { "context_size": 131072, "supports_tools": true },
+        "llama3.2:3b": { "context_size": 131072, "supports_tools": true },
+
         "llama3.2-vision:latest": { "context_size": 131072, "supports_input_image": true },
-        "llava:13b": { "context_size": 4096, "supports_input_image": true },
+        "llama3.2-vision:11b": { "context_size": 131072, "supports_input_image": true },
+        "llama3.2-vision:90b": { "context_size": 131072, "supports_input_image": true },
+
         "llava:latest": { "context_size": 32768, "supports_input_image": true },
+        "llava:7b": { "context_size": 32768, "supports_input_image": true },
+        "llava:13b": { "context_size": 4096, "supports_input_image": true },
+        "llava:34b": { "context_size": 4096, "supports_input_image": true },
+
         "magistral:latest": { "context_size": 40000, "supports_tools": true, "supports_thinking": true },
+        "magistral:24b": { "context_size": 40000, "supports_tools": true, "supports_thinking": true },
+
         "mistral-nemo:latest": { "context_size": 1024000, "supports_tools": true },
+        "mistral-nemo:12b": { "context_size": 1024000, "supports_tools": true },
+
+        "mistral-small3.1:latest": { "context_size": 131072, "supports_tools": true, "supports_input_image": true },
         "mistral-small3.2:latest": { "context_size": 131072, "supports_tools": true, "supports_input_image": true },
+        "mistral-small:latest": { "context_size": 32768, "supports_tools": true },
+        "mistral-small:22b": { "context_size": 131072, "supports_tools": true },
         "mistral:latest": { "context_size": 32768, "supports_tools": true },
+        "mixtral:latest": { "context_size": 32768, "supports_tools": true },
+        "mixtral:8x7b": { "context_size": 32768, "supports_tools": true },
+        "mixtral:8x22b": { "context_size": 65536, "supports_tools": true },
+
+        "openthinker:latest": { "context_size": 32768 },
+        "openthinker:7b": { "context_size": 32768 },
+        "openthinker:32b": { "context_size": 32768 },
+
         "phi4:latest": { "context_size": 16384 },
+        "phi4:14b": { "context_size": 16384 },
+
         "qwen3:latest": { "context_size": 40960, "supports_tools": true, "supports_thinking": true },
-        "qwen3-coder:latest": { "context_size": 262144 }
+        "qwen3:0.6b": { "context_size": 40960, "supports_tools": true, "supports_thinking": true },
+        "qwen3:1.7b": { "context_size": 40960, "supports_tools": true, "supports_thinking": true },
+        "qwen3:4b": { "context_size": 262144, "supports_tools": true, "supports_thinking": true },
+        "qwen3:8b": { "context_size": 40960, "supports_tools": true, "supports_thinking": true },
+        "qwen3:14b": { "context_size": 40960, "supports_tools": true, "supports_thinking": true },
+        "qwen3:30b": { "context_size": 262144, "supports_tools": true, "supports_thinking": true },
+        "qwen3:32b": { "context_size": 40960, "supports_tools": true, "supports_thinking": true },
+        "qwen3:235b": { "context_size": 262144, "supports_tools": true, "supports_thinking": true },
+
+        "qwen3-coder:latest": { "context_size": 262144 },
+        "qwen3-coder:30b": { "context_size": 262144 },
+        "qwen3-coder:480b": { "context_size": 262144 }
       }
     },
+
     "OpenAI": {
       "defaults": {
         "supports_streaming": true,
@@ -51,12 +114,15 @@
       "models": {
         "gpt-5": { "context_size": 400000, "supports_input_image": true, "supports_thinking": true },
         "gpt-5-mini": { "context_size": 400000, "supports_input_image": true, "supports_thinking": true },
+        "gpt-4.1": { "context_size": 1000000, "supports_input_image": true },
+        "gpt-4.1-mini": { "context_size": 1000000, "supports_input_image": true },
         "gpt-4o": { "context_size": 128000, "supports_input_image": true },
         "gpt-4o-mini": { "context_size": 128000, "supports_input_image": true },
         "o3": { "context_size": 200000, "supports_thinking": true },
         "o3-mini": { "context_size": 200000, "supports_thinking": true }
       }
     },
+
     "XAI": {
       "defaults": {
         "supports_streaming": true,
@@ -66,20 +132,75 @@
       },
       "models": {
         "grok-4-0709": { "context_size": 256000 },
+        "grok-code-fast-1": { "context_size": 256000 },
         "grok-3": { "context_size": 131072 },
         "grok-3-mini": { "context_size": 131072 }
       }
     },
+
     "Gemini": {
       "defaults": {
         "supports_streaming": true,
         "supports_tools": true,
-        "supports_input_image": false
+        "supports_input_image": true,
+        "supports_structured": true
       },
       "models": {
-        "models/gemini-1.5-pro-latest": { "context_size": 1048576, "supports_input_image": true },
-        "models/gemini-1.5-flash-latest": { "context_size": 1048576, "supports_input_image": true },
-        "models/gemini-1.0-pro": { "context_size": 32768 }
+        "models/gemini-2.5-pro": { "context_size": 1048576, "supports_thinking": true },
+        "models/gemini-2.5-flash": { "context_size": 1048576, "supports_thinking": true },
+        "models/gemini-2.5-flash-lite": { "context_size": 1048576, "supports_thinking": true },
+
+        "models/gemini-live-2.5-flash-preview": {
+          "context_size": 1048576,
+          "supports_thinking": false
+        },
+
+        "models/gemini-2.5-flash-preview-native-audio-dialog": {
+          "context_size": 128000,
+          "supports_thinking": true
+        },
+        "models/gemini-2.5-flash-exp-native-audio-thinking-dialog": {
+          "context_size": 128000,
+          "supports_thinking": true
+        },
+
+        "models/gemini-2.5-flash-image-preview": {
+          "context_size": 32768,
+          "supports_structured": true,
+          "supports_input_image": true
+        },
+
+        "models/gemini-2.5-flash-preview-tts": {
+          "context_size": 8000,
+          "supports_structured": false,
+          "supports_input_image": false
+        },
+        "models/gemini-2.5-pro-preview-tts": {
+          "context_size": 8000,
+          "supports_structured": false,
+          "supports_input_image": false
+        },
+
+        "models/gemini-2.0-flash": { "context_size": 131072 },
+        "models/gemini-2.0-flash-lite": { "context_size": 131072 },
+
+        "models/gemini-1.5-pro": { "context_size": 1048576 },
+        "models/gemini-1.5-flash": { "context_size": 1048576 },
+        "models/gemini-1.5-flash-8b": { "context_size": 1048576 }
+      }
+    },
+
+    "OpenRouter": {
+      "defaults": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_structured": true
+      },
+      "models": {
+        "qwen/qwen3-4b:free": { "context_size": 32768, "supports_tools": true },
+        "google/gemini-2.5-flash": { "context_size": 1048576, "supports_tools": true, "supports_structured": true },
+        "google/gemini-2.5-pro": { "context_size": 1048576, "supports_tools": true, "supports_structured": true },
+        "openai/gpt-4o-mini": { "context_size": 128000, "supports_tools": true, "supports_structured": true }
       }
     }
   }
