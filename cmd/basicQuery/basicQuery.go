@@ -22,7 +22,7 @@ const (
 	APP                = "basicQuery"
 	defaultRole        = "You are a helpful bash shell assistant.Your output should be concise, efficient and easy to read in a bash Linux console."
 	defaultTemperature = 0.2
-	defaultTimeout     = 30 * time.Second
+	defaultTimeout     = 120 * time.Second
 )
 
 type argumentsToBasicQuery struct {
@@ -30,6 +30,8 @@ type argumentsToBasicQuery struct {
 	Model        string
 	SystemPrompt string
 	UserPrompt   string
+	Temperature  float64
+	Streaming    bool
 }
 
 // usage provides a more detailed help message for the CLI tool.
@@ -39,9 +41,11 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "\nRequired Flags:")
 	fmt.Fprintf(os.Stderr, "  -provider\tProvider to use (ollama, gemini, xai, openai, openrouter)\n")
 	fmt.Fprintln(os.Stderr, "\nOptions for querying:")
-	fmt.Fprintf(os.Stderr, "  -prompt\tThe prompt to send to the LLM. Required for querying.\n")
 	fmt.Fprintf(os.Stderr, "  -model\tModel to use. If blank, a default for the provider is chosen.\n")
+	fmt.Fprintf(os.Stderr, "  -prompt\tThe prompt to send to the LLM. Required for querying.\n")
 	fmt.Fprintf(os.Stderr, "  -system\tThe system role for the assistant.\n")
+	fmt.Fprintf(os.Stderr, "  -temperature\tThe temperature of the model. Increasing the temperature will make the model answer more creatively(value range 0.0 - 2.0).\n")
+	fmt.Fprintf(os.Stderr, "  -stream\tEnable streaming the response.\n") // Add this line
 	fmt.Fprintln(os.Stderr, "\nOptions for listing models:")
 	fmt.Fprintf(os.Stderr, "  -list-models\tLists available models for the specified provider and exits.\n")
 	fmt.Fprintf(os.Stderr, "  -json-output\tUse with -list-models to output in JSON format.\n\n")
@@ -66,6 +70,8 @@ func main() {
 	userPromptFlag := flag.String("prompt", "", "The prompt to send to the LLM")
 	listModelsFlag := flag.Bool("list-models", false, "List available models for the provider and exit")
 	jsonOutputFlag := flag.Bool("json-output", false, "Use with -list-models for JSON output")
+	temperatureFlag := flag.Float64("temperature", defaultTemperature, fmt.Sprintf("The temperature for the LLM response (0.0 - 2.0) default value is : %f", defaultTemperature))
+	streamFlag := flag.Bool("stream", false, "Enable streaming the response")
 	flag.Parse()
 
 	// 2. Make the -provider flag mandatory
@@ -80,6 +86,7 @@ func main() {
 	kind, _, err := llm.GetProviderKindAndDefaultModel(*providerFlag)
 	if err != nil {
 		l.Error("💥💥 %v", err)
+		flag.Usage()
 		os.Exit(1)
 	}
 	// The model will be set properly in the run() function, we can use a dummy value here.
@@ -104,12 +111,15 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	l.Info("the system prompt is : %s", *systemPromptFlag)
 
 	params := argumentsToBasicQuery{
 		Provider:     *providerFlag,
 		Model:        *modelFlag,
 		SystemPrompt: *systemPromptFlag,
 		UserPrompt:   *userPromptFlag,
+		Temperature:  *temperatureFlag,
+		Streaming:    *streamFlag,
 	}
 
 	if err := run(l, params, os.Stdout); err != nil {
@@ -147,6 +157,10 @@ func handleListModels(l golog.MyLogger, provider llm.Provider, jsonOutput bool) 
 // run is now responsible for validating the model and executing the query.
 func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
 	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, git: %s", APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
+
+	if params.UserPrompt == "" {
+		return fmt.Errorf("💥💥 provider : %s,  error user prompt cannot be empty ", params.Provider)
+	}
 
 	kind, defaultModel, err := llm.GetProviderKindAndDefaultModel(params.Provider)
 	if err != nil {
@@ -186,6 +200,7 @@ func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
 		}
 		l.Info("✅ Model '%s' is valid.", modelToUse)
 	}
+	temperature := llm.Clamp(params.Temperature, 0.0, 2.0)
 
 	req := &llm.LLMRequest{
 		Model: modelToUse, // Use the validated or default model
@@ -193,21 +208,38 @@ func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
 			{Role: llm.RoleSystem, Content: params.SystemPrompt},
 			{Role: llm.RoleUser, Content: params.UserPrompt},
 		},
-		Temperature: defaultTemperature,
-		Stream:      false,
+		Temperature: temperature,
+		Stream:      params.Streaming,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	l.Info("Sending prompt to %s LLM...\n", params.Provider)
-	resp, err := provider.Query(ctx, req)
-	if err != nil {
-		return fmt.Errorf("error querying LLM: %w", err)
-	}
+	if params.Streaming {
+		l.Info("Sending prompt to %s LLM (streaming)...\n", params.Provider)
+		fmt.Fprintln(out, "\nLLM Response (Streaming):")
 
-	fmt.Fprintln(out, "\nLLM Response:")
-	fmt.Fprintln(out, resp.Text)
+		// onDelta callback prints text chunks as they arrive
+		onDelta := func(delta llm.Delta) {
+			fmt.Fprint(out, delta.Text)
+		}
+
+		_, err := provider.Stream(ctx, req, onDelta)
+		if err != nil {
+			return fmt.Errorf("error querying LLM via stream: %w", err)
+		}
+		fmt.Fprintln(out) // Add a final newline for clean output
+	} else {
+
+		l.Info("Sending prompt to %s LLM...\n", params.Provider)
+		resp, err := provider.Query(ctx, req)
+		if err != nil {
+			return fmt.Errorf("error querying LLM: %w", err)
+		}
+
+		fmt.Fprintln(out, "\nLLM Response:")
+		fmt.Fprintln(out, resp.Text)
+	}
 
 	return nil
 }

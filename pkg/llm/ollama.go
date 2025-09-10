@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -133,10 +134,6 @@ func (o *OllamaProvider) Query(ctx context.Context, req *LLMRequest) (*LLMRespon
 	}
 
 	return llmResp, nil
-}
-
-func (o *OllamaProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
-	return nil, errors.New("ollama streaming not implemented") // Stub with proper error
 }
 
 func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
@@ -272,4 +269,78 @@ func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	})
 
 	return modelInfos, nil
+}
+
+func (o *OllamaProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+	if onDelta == nil {
+		return nil, errors.New("onDelta callback cannot be nil for streaming")
+	}
+
+	req.Stream = true
+	payload := ollamaRequest{
+		Model:    FirstNonEmpty(req.Model, o.Model),
+		Messages: ToOpenAIChatMessages(req.Messages),
+		Stream:   true,
+	}
+	if req.Temperature > 0 {
+		payload.Options = map[string]any{"temperature": req.Temperature}
+	}
+	if len(req.Tools) > 0 {
+		payload.Tools = req.Tools
+	}
+
+	// Create and execute request
+	bodyBytes, _ := json.Marshal(payload)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, o.BaseURL+"/api/chat", strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ollama stream request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := o.Client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send ollama stream request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("ollama stream returned non-200 status: %d %s", resp.StatusCode, string(body))
+	}
+
+	// Process the JSON stream
+	decoder := json.NewDecoder(resp.Body)
+	finalResponse := &LLMResponse{}
+	fullText := &strings.Builder{}
+
+	for {
+		var chunk ollamaResponse
+		if err := decoder.Decode(&chunk); err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, fmt.Errorf("error decoding ollama stream: %w", err)
+		}
+
+		if chunk.Error != "" {
+			return nil, fmt.Errorf("ollama API error in stream: %s", chunk.Error)
+		}
+
+		textDelta := chunk.Message.Content
+		if textDelta != "" {
+			fullText.WriteString(textDelta)
+			onDelta(Delta{Text: textDelta})
+		}
+
+		if chunk.Done {
+			finalResponse.FinishReason = "stop" // Ollama doesn't provide a reason, so we assume "stop"
+			break
+		}
+	}
+
+	onDelta(Delta{Done: true, FinishReason: finalResponse.FinishReason})
+	finalResponse.Text = fullText.String()
+	return finalResponse, nil
 }

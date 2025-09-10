@@ -1,14 +1,18 @@
 package llm
 
 import (
+	"bufio"
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
@@ -169,11 +173,6 @@ func buildPayload(req *LLMRequest, defaultModel string) map[string]any {
 	return payload
 }
 
-// Stream and ListModels would also be part of this struct
-func (p *openAICompatibleProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
-	return nil, fmt.Errorf("streaming not implemented")
-}
-
 // ListModels fetches the list of available models from an OpenAI-compatible API.
 func (p *openAICompatibleProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	url := p.BaseURL + "/models"
@@ -276,4 +275,116 @@ func (p *openAICompatibleProvider) ListModels(ctx context.Context) ([]ModelInfo,
 	})
 
 	return modelInfos, nil
+}
+
+// Stream sends a streaming request to an OpenAI-compatible API.
+// Deltas are sent to the onDelta callback as they arrive.
+func (p *openAICompatibleProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+	if onDelta == nil {
+		return nil, errors.New("onDelta callback cannot be nil for streaming")
+	}
+	if len(req.Messages) == 0 {
+		return nil, errors.New("request must have at least one message")
+	}
+
+	req.Stream = true // Ensure stream is enabled
+	payload := buildPayload(req, p.Model)
+
+	headers := http.Header{
+		"Content-Type":  []string{"application/json"},
+		"Authorization": []string{"Bearer " + p.APIKey},
+		"Accept":        []string{"text/event-stream"}, // Important for SSE
+		"Connection":    []string{"keep-alive"},
+	}
+	for key, value := range p.ExtraHeaders {
+		headers[key] = []string{value}
+	}
+
+	// Create request
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal stream request payload: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.BaseURL+p.Endpoint, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stream request: %w", err)
+	}
+	httpReq.Header = headers
+
+	// Execute request
+	resp, err := p.Client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send stream request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("received non-2xx status code %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Process the SSE stream
+	scanner := bufio.NewScanner(resp.Body)
+	finalResponse := &LLMResponse{}
+	fullText := &strings.Builder{}
+
+	// SSE wire format for deltas
+	type streamChoice struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
+	}
+	type streamChunk struct {
+		Choices []streamChoice `json:"choices"`
+		Usage   *Usage         `json:"usage"` // Sometimes usage is in the last chunk
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+
+		var chunk streamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			p.l.Warn("failed to unmarshal stream chunk: %v. data: %s", err, data)
+			continue
+		}
+
+		if len(chunk.Choices) > 0 {
+			// Send text delta
+			textDelta := chunk.Choices[0].Delta.Content
+			if textDelta != "" {
+				fullText.WriteString(textDelta)
+				onDelta(Delta{Text: textDelta})
+			}
+
+			// Capture finish reason
+			if chunk.Choices[0].FinishReason != "" {
+				finalResponse.FinishReason = chunk.Choices[0].FinishReason
+			}
+		}
+
+		// Capture usage stats if present in the final chunk
+		if chunk.Usage != nil {
+			finalResponse.Usage = chunk.Usage
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading stream: %w", err)
+	}
+
+	onDelta(Delta{Done: true, FinishReason: finalResponse.FinishReason})
+	finalResponse.Text = fullText.String()
+	return finalResponse, nil
 }

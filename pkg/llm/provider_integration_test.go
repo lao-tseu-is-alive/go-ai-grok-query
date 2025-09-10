@@ -80,8 +80,10 @@ func TestAllProvidersIntegration(t *testing.T) {
 			}
 
 			switch kind {
-			case ProviderOpenAI, ProviderOpenRouter:
-				provider, err = NewOpenAICompatAdapter(cfg, server.URL, l)
+			case ProviderOpenAI:
+				provider, err = NewOpenAIAdapter(cfg, l)
+			case ProviderOpenRouter:
+				provider, err = NewOpenRouterAdapter(cfg, l)
 			case ProviderXAI:
 				provider, err = newXaiAdapter(cfg, l)
 			case ProviderOllama:

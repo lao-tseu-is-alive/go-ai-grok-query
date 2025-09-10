@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"time"
 
@@ -118,10 +117,6 @@ func getModelsName(l golog.MyLogger, provider llm.Provider) ([]string, error) {
 	return modelNames, nil
 }
 
-func clamp(val, min, max float64) float64 {
-	return math.Min(max, math.Max(min, val))
-}
-
 func run(l golog.MyLogger, params argumentsToAskToAll) error {
 	l.Info("🚀🚀 Starting App:'%s', ver:%s, build:%s, git: %s", APP, version.VERSION, version.BuildStamp, version.REPOSITORY)
 	kind, defModel, err := llm.GetProviderKindAndDefaultModel(params.Provider)
@@ -137,7 +132,7 @@ func run(l golog.MyLogger, params argumentsToAskToAll) error {
 	if err != nil {
 		return fmt.Errorf("error getting list of models for provider %s. err: %w", params.Provider, err)
 	}
-	temperature := clamp(params.Temperature, 0.0, 2.0)
+	temperature := llm.Clamp(params.Temperature, 0.0, 2.0)
 	allResults := make([]llmResult, 0, len(modelsList))
 	// Loop through each model and query it
 	for i, currentModel := range modelsList {

@@ -126,7 +126,7 @@ func Test_run(t *testing.T) {
 				SystemPrompt: "",
 				UserPrompt:   "",
 			},
-			wantOut: "prompt flag cannot be empty",
+			wantOut: "prompt cannot be empty",
 			wantErr: true,
 		},
 		{
@@ -137,7 +137,7 @@ func Test_run(t *testing.T) {
 				SystemPrompt: "",
 				UserPrompt:   "test",
 			},
-			wantOut: "unknown provider 'invalid'",
+			wantOut: "provider kind invalid is not available",
 			wantErr: true,
 		},
 	}

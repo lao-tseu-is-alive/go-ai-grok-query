@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
@@ -150,10 +152,6 @@ func FirstSystemMessage(msgs []LLMMessage) string {
 	return ""
 }
 
-func (g *GeminiProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
-	return nil, errors.New("gemini streaming not implemented")
-}
-
 func (g *GeminiProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	url := g.BaseURL + "/v1beta/models"
 	headers := http.Header{
@@ -177,4 +175,109 @@ func (g *GeminiProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	return modelInfos, nil
+}
+
+func (g *GeminiProvider) Stream(ctx context.Context, req *LLMRequest, onDelta func(Delta)) (*LLMResponse, error) {
+	// 1. Validate inputs and build the request payload
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+	if onDelta == nil {
+		return nil, errors.New("onDelta callback cannot be nil for streaming")
+	}
+
+	payload := geminiRequest{
+		Contents:         ToGeminiContents(req.Messages),
+		GenerationConfig: map[string]any{},
+	}
+	if req.Temperature > 0 {
+		payload.GenerationConfig["temperature"] = req.Temperature
+	}
+	if sys := FirstSystemMessage(req.Messages); sys != "" {
+		payload.SystemInstruction = &map[string]any{
+			"role":  "system",
+			"parts": []map[string]any{{"text": sys}},
+		}
+	}
+
+	// 2. Prepare and send the HTTP request
+	modelName := FirstNonEmpty(req.Model, g.Model)
+	url := g.BaseURL + "/v1beta/models/" + path.Join(modelName, ":streamGenerateContent")
+	headers := http.Header{
+		"Content-Type":   []string{"application/json"},
+		"x-goog-api-key": []string{g.APIKey},
+	}
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal gemini stream request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gemini stream request: %w", err)
+	}
+	httpReq.Header = headers
+	g.l.Debug("Gemini stream request sent to URL: %s", url)
+	resp, err := g.Client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send gemini stream request: %w", err)
+	}
+	defer resp.Body.Close()
+	g.l.Debug("Gemini stream response status: %s", resp.Status)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("gemini stream returned non-200 status: %d %s", resp.StatusCode, string(body))
+	}
+
+	// 3.  Process the response as a streaming JSON array, not as SSE.
+	decoder := json.NewDecoder(resp.Body)
+	finalResponse := &LLMResponse{}
+	fullText := &strings.Builder{}
+
+	// The entire response is a single JSON array. We first must read the opening token '['.
+	t, err := decoder.Token()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read opening token of JSON array: %w", err)
+	}
+	if t != json.Delim('[') {
+		return nil, fmt.Errorf("expected '[' at start of stream, but got %v", t)
+	}
+	g.l.Debug("Successfully found opening '[' of the JSON array.")
+
+	// Now, we loop through the array, decoding one full JSON object at a time.
+	for decoder.More() {
+		var chunk geminiResponse
+		if err := decoder.Decode(&chunk); err != nil {
+			g.l.Warn("Failed to decode gemini object from stream: %v", err)
+			continue
+		}
+		g.l.Debug("Successfully decoded one object from the stream array.")
+
+		// The logic for processing the chunk is the same as before.
+		if len(chunk.Candidates) > 0 {
+			candidate := chunk.Candidates[0]
+			if len(candidate.Content.Parts) > 0 {
+				textDelta := candidate.Content.Parts[0].Text
+				if textDelta != "" {
+					g.l.Debug("Extracted delta: '%s'", textDelta)
+					fullText.WriteString(textDelta)
+					onDelta(Delta{Text: textDelta})
+				}
+			}
+			if candidate.FinishReason != "" {
+				finalResponse.FinishReason = candidate.FinishReason
+			}
+		}
+		if chunk.Usage.TotalTokenCount > 0 {
+			finalResponse.Usage = &Usage{
+				PromptTokens:     chunk.Usage.PromptTokenCount,
+				CompletionTokens: chunk.Usage.CandidatesTokenCount,
+				TotalTokens:      chunk.Usage.TotalTokenCount,
+			}
+		}
+	}
+
+	g.l.Debug("Finished processing Gemini stream.")
+	onDelta(Delta{Done: true, FinishReason: finalResponse.FinishReason})
+	finalResponse.Text = fullText.String()
+	return finalResponse, nil
 }

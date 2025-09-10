@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 )
 
 // ToOpenAIChatMessages converts internal messages to OpenAI API format.
@@ -64,4 +65,8 @@ func (r ExampleToolRegistry) Execute(name string, args json.RawMessage) (string,
 		return "", fmt.Errorf("tool %q not found", name)
 	}
 	return exec.Execute(args)
+}
+
+func Clamp(val, min, max float64) float64 {
+	return math.Min(max, math.Max(min, val))
 }
