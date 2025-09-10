@@ -1,3 +1,6 @@
+### Release 0.2.10 :
++ added GetModelsList to simplify tools code and model verification
+
 ### Release 0.2.9 :
  + Implemented streaming for all providers type
  + Added temperature parameter to basicQuery
