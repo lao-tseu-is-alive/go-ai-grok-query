@@ -33,3 +33,5 @@ go.work.sum
 /scratch.md
 /basicQuery
 /mock_server
+/info/ollama_models.json
+/info/gemini_models.json

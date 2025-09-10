@@ -1,51 +1,86 @@
 {
   "$schema": "./models.schema.json",
-  "ollama": {
-    "models": [
-      { "name": "deepcoder:1.5b", "contextSize": 131072 },
-      { "name": "deepcoder:latest", "contextSize": 131072 },
-      { "name": "deepseek-r1:latest", "contextSize": 131072, "supportsTools": true, "supportsThinking": true },
-      { "name": "devstral:latest", "contextSize": 131072, "supportsTools": true },
-      { "name": "dolphin3:latest", "contextSize": 131072 },
-      { "name": "exaone-deep:latest", "contextSize": 32768 },
-      { "name": "falcon3:latest", "contextSize": 32768 },
-      { "name": "gemma3:latest", "contextSize": 131072, "supportsInputImage": true },
-      { "name": "gpt-oss:latest", "contextSize": 131072, "supportsTools": true, "supportsThinking": true },
-      { "name": "llama3.1:8b-instruct-q8_0", "contextSize": 131072, "supportsTools": true },
-      { "name": "llama3.1:latest", "contextSize": 131072, "supportsTools": true },
-      { "name": "llava:13b", "contextSize": 4096, "supportsInputImage": true },
-      { "name": "llava:latest", "contextSize": 32768, "supportsInputImage": true },
-      { "name": "magistral:latest", "contextSize": 40000, "supportsTools": true, "supportsThinking": true },
-      { "name": "mistral-nemo:latest", "contextSize": 1024000, "supportsTools": true },
-      { "name": "mistral-small3.2:latest", "contextSize": 131072, "supportsTools": true, "supportsInputImage": true },
-      { "name": "mistral:latest", "contextSize": 32768, "supportsTools": true },
-      { "name": "phi4:latest", "contextSize": 16384 },
-      { "name": "qwen3:latest", "contextSize": 40960, "supportsTools": true, "supportsThinking": true },
-      { "name": "qwen3-coder:latest", "contextSize": 262144 }
-    ]
-  },
-  "openai": {
-    "models": [
-      { "name": "gpt-5", "contextSize": 400000, "supportsTools": true, "supportsStructured": true, "supportsInputImage": true, "supportsThinking": true },
-      { "name": "gpt-5-mini", "contextSize": 400000, "supportsTools": true, "supportsStructured": true, "supportsInputImage": true, "supportsThinking": true },
-      { "name": "gpt-4o", "contextSize": 128000, "supportsTools": true, "supportsStructured": true, "supportsInputImage": true },
-      { "name": "gpt-4o-mini", "contextSize": 128000, "supportsTools": true, "supportsStructured": true, "supportsInputImage": true },
-      { "name": "o3", "contextSize": 200000, "supportsTools": true, "supportsStructured": true, "supportsThinking": true },
-      { "name": "o3-mini", "contextSize": 200000, "supportsTools": true, "supportsStructured": true, "supportsThinking": true }
-    ]
-  },
-  "xai": {
-    "models": [
-      { "name": "grok-4-0709", "contextSize": 256000, "supportsTools": true, "supportsStructured": true, "supportsThinking": true },
-      { "name": "grok-3", "contextSize": 131072, "supportsTools": true, "supportsStructured": true, "supportsThinking": true },
-      { "name": "grok-3-mini", "contextSize": 131072, "supportsTools": true, "supportsStructured": true, "supportsThinking": true }
-    ]
-  },
-  "gemini": {
-    "models": [
-      { "name": "models/gemini-1.5-pro-latest", "contextSize": 1048576, "supportsTools": true, "supportsInputImage": true },
-      { "name": "models/gemini-1.5-flash-latest", "contextSize": 1048576, "supportsTools": true, "supportsInputImage": true },
-      { "name": "models/gemini-1.0-pro", "contextSize": 32768, "supportsTools": true }
-    ]
+  "version": 1,
+  "providers": {
+    "Ollama": {
+      "defaults": {
+        "context_size": 8192,
+        "supports_streaming": true,
+        "supports_tools": false,
+        "supports_thinking": false,
+        "supports_input_image": false,
+        "supports_json_mode": false,
+        "supports_structured": false
+      },
+      "exclude_patterns": [
+        "embed",
+        "paraphrase",
+        "all-minilm"
+      ],
+      "models": {
+        "deepcoder:latest": { "context_size": 131072 },
+        "deepcoder:1.5b":  {"context_size": 131072 },
+        "deepseek-r1:latest": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "devstral:latest": { "context_size": 131072, "supports_tools": true },
+        "dolphin3:latest": { "context_size": 131072 },
+        "exaone-deep:latest": { "context_size": 32768 },
+        "falcon3:latest": { "context_size": 32768 },
+        "gemma3:latest": { "context_size": 131072, "supports_input_image": true },
+        "gpt-oss:latest": { "context_size": 131072, "supports_tools": true, "supports_thinking": true },
+        "llama3.1:latest": { "context_size": 131072, "supports_tools": true },
+        "llama3.2-vision:latest": { "context_size": 131072, "supports_input_image": true },
+        "llava:13b": { "context_size": 4096, "supports_input_image": true },
+        "llava:latest": { "context_size": 32768, "supports_input_image": true },
+        "magistral:latest": { "context_size": 40000, "supports_tools": true, "supports_thinking": true },
+        "mistral-nemo:latest": { "context_size": 1024000, "supports_tools": true },
+        "mistral-small3.2:latest": { "context_size": 131072, "supports_tools": true, "supports_input_image": true },
+        "mistral:latest": { "context_size": 32768, "supports_tools": true },
+        "phi4:latest": { "context_size": 16384 },
+        "qwen3:latest": { "context_size": 40960, "supports_tools": true, "supports_thinking": true },
+        "qwen3-coder:latest": { "context_size": 262144 }
+      }
+    },
+    "OpenAI": {
+      "defaults": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_structured": true,
+        "supports_input_image": false,
+        "supports_thinking": false
+      },
+      "models": {
+        "gpt-5": { "context_size": 400000, "supports_input_image": true, "supports_thinking": true },
+        "gpt-5-mini": { "context_size": 400000, "supports_input_image": true, "supports_thinking": true },
+        "gpt-4o": { "context_size": 128000, "supports_input_image": true },
+        "gpt-4o-mini": { "context_size": 128000, "supports_input_image": true },
+        "o3": { "context_size": 200000, "supports_thinking": true },
+        "o3-mini": { "context_size": 200000, "supports_thinking": true }
+      }
+    },
+    "XAI": {
+      "defaults": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_structured": true,
+        "supports_thinking": true
+      },
+      "models": {
+        "grok-4-0709": { "context_size": 256000 },
+        "grok-3": { "context_size": 131072 },
+        "grok-3-mini": { "context_size": 131072 }
+      }
+    },
+    "Gemini": {
+      "defaults": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_input_image": false
+      },
+      "models": {
+        "models/gemini-1.5-pro-latest": { "context_size": 1048576, "supports_input_image": true },
+        "models/gemini-1.5-flash-latest": { "context_size": 1048576, "supports_input_image": true },
+        "models/gemini-1.0-pro": { "context_size": 32768 }
+      }
+    }
   }
 }

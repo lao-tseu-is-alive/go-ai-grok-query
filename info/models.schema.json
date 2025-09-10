@@ -1,52 +1,54 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "LLM Model Capabilities Configuration",
-  "description": "A configuration file defining the capabilities of various models for different providers.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Model Catalog",
   "type": "object",
+  "required": ["version", "providers"],
   "properties": {
-    "$schema": {
-      "type": "string",
-      "description": "A reference to the schema used to validate this file."
-    }
-  },
-  "patternProperties": {
-    "^(?!\\$schema$)[a-zA-Z0-9]+$": {
+    "version": { "type": "integer", "minimum": 1 },
+    "providers": {
       "type": "object",
-      "description": "Holds the configuration for a specific provider (e.g., 'ollama', 'openai').",
-      "properties": {
-        "models": {
-          "type": "array",
-          "description": "A list of specific models and their capabilities.",
-          "items": {
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "context_size": { "type": "integer", "minimum": 1 },
+                "supports_tools": { "type": "boolean" },
+                "supports_thinking": { "type": "boolean" },
+                "supports_input_image": { "type": "boolean" },
+                "supports_streaming": { "type": "boolean" },
+                "supports_json_mode": { "type": "boolean" },
+                "supports_structured": { "type": "boolean" },
+                "family": { "type": "string" },
+                "parameter_size": { "type": "string" },
+                "size": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "defaults": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string",
-                "description": "The unique identifier for the model (e.g., 'gemma3:latest', 'gpt-4o-mini')."
-              },
-              "contextSize": {
-                "type": "integer",
-                "description": "The maximum context window size in tokens.",
-                "minimum": 0
-              },
-              "supportsTools": {
-                "type": "boolean",
-                "description": "Indicates if the model supports tool calling (function calling)."
-              },
-              "supportsThinking": {
-                "type": "boolean",
-                "description": "Indicates if the model supports an internal 'thinking' or 'reasoning' step."
-              },
-              "supportsInputImage": {
-                "type": "boolean",
-                "description": "Indicates if the model can process image inputs (multimodal)."
-              }
+              "context_size": { "type": "integer", "minimum": 1 },
+              "supports_tools": { "type": "boolean" },
+              "supports_thinking": { "type": "boolean" },
+              "supports_input_image": { "type": "boolean" },
+              "supports_streaming": { "type": "boolean" },
+              "supports_json_mode": { "type": "boolean" },
+              "supports_structured": { "type": "boolean" }
             },
-            "required": ["name", "contextSize"]
+            "additionalProperties": false
+          },
+          "exclude_patterns": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
           }
-        }
-      },
-      "required": ["models"]
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false
