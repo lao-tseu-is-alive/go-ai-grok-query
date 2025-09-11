@@ -36,6 +36,7 @@ jobs:
         ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
         ADMIN_ID: ${{ secrets.ADMIN_ID }}
+        PROVIDER_INFO_FILEPATH: ${{ github.workspace }}/info/models.json
       run: go test -coverprofile coverage.out -v ./...
 
     - name: Upload coverage to Codecov

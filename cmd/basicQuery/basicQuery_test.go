@@ -50,7 +50,7 @@ func mockApiServer() *httptest.Server {
 		fmt.Fprintln(w, `{"models":[{"name":"qwen3:latest"}]}`)
 	})
 	handler.HandleFunc("/v1beta/models", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, `{"models":[{"name":"gemini-test"}]}`)
+		fmt.Fprintln(w, `{"models":[{"name":"models/gemini-2.5-flash"}]}`)
 	})
 	return httptest.NewServer(handler)
 }
@@ -115,7 +115,7 @@ func Test_run(t *testing.T) {
 			name: "gemini provider",
 			p: argumentsToBasicQuery{
 				Provider:     "gemini",
-				Model:        "gemini-test",
+				Model:        "models/gemini-2.5-flash",
 				SystemPrompt: "",
 				UserPrompt:   "test",
 			},
