@@ -35,3 +35,4 @@ go.work.sum
 /mock_server
 /info/ollama_models.json
 /info/gemini_models.json
+models_info

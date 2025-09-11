@@ -14,33 +14,44 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 // openAICompatibleProvider provides a base for providers that use an OpenAI-compatible API.
 type openAICompatibleProvider struct {
-	BaseURL      string
-	Kind         ProviderKind
-	APIKey       string
-	Model        string
-	Client       *http.Client
-	ExtraHeaders map[string]string
-	Endpoint     string
-	l            golog.MyLogger
+	BaseURL                string
+	Kind                   ProviderKind
+	APIKey                 string
+	Model                  string
+	CatalogProvidersModels *ModelCatalog
+	Client                 *http.Client
+	ExtraHeaders           map[string]string
+	Endpoint               string
+	l                      golog.MyLogger
 }
 
 // NewOpenAICompatAdapter is a shared constructor for OpenAI-like providers.
 func NewOpenAICompatAdapter(cfg ProviderConfig, kind ProviderKind, defaultBaseURL string, l golog.MyLogger) (Provider, error) {
 	baseURL := FirstNonEmpty(cfg.BaseURL, defaultBaseURL)
+
+	filepath := config.GetProviderInfoFilePathFromEnv(defaultModelInfoFilePath)
+	// Load only once the external model configuration
+	catalog, err := LoadModelCatalog(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load model catalog: %w", err)
+	}
+
 	return &openAICompatibleProvider{
-		BaseURL:      baseURL,
-		Kind:         kind,
-		APIKey:       cfg.APIKey,
-		Model:        cfg.Model,
-		Client:       &http.Client{},
-		ExtraHeaders: maps.Clone(cfg.ExtraHeaders), // Go 1.21+
-		Endpoint:     "/chat/completions",
-		l:            l,
+		BaseURL:                baseURL,
+		Kind:                   kind,
+		APIKey:                 cfg.APIKey,
+		Model:                  cfg.Model,
+		CatalogProvidersModels: catalog,
+		Client:                 &http.Client{},
+		ExtraHeaders:           maps.Clone(cfg.ExtraHeaders), // Go 1.21+
+		Endpoint:               "/chat/completions",
+		l:                      l,
 	}, nil
 }
 
@@ -197,74 +208,27 @@ func (p *openAICompatibleProvider) ListModels(ctx context.Context) ([]ModelInfo,
 	modelInfos := make([]ModelInfo, 0, len(resp.Data))
 	for _, model := range resp.Data {
 		var tempModelInfo ModelInfo
-		tempModelInfo.SupportsStreaming = true
-		switch p.Kind {
-		case ProviderXAI:
-			switch model.ID {
-			case "grok-code-fast-1", "grok-4-0709":
-				tempModelInfo.Name = model.ID
-				tempModelInfo.ContextSize = 256000
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsStructured = true
-				tempModelInfo.SupportsThinking = true
-			case "grok-3", "grok-3-mini":
-				tempModelInfo.Name = model.ID
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsStructured = true
-				tempModelInfo.SupportsThinking = true
-			default:
-				// do not list deprecated models or image generation models
-			}
-		case ProviderOpenAI:
-			switch model.ID {
-			case "gpt-5", "gpt-5-mini", "gpt-5-nano":
-				tempModelInfo.Name = model.ID
-				tempModelInfo.ContextSize = 400000
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsStructured = true
-				tempModelInfo.SupportsInputImage = true
-				tempModelInfo.SupportsThinking = true
-
-			case "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano":
-				tempModelInfo.Name = model.ID
-				tempModelInfo.ContextSize = 1000000     // mini also documented with long context in 4.1 guides[2][1]
-				tempModelInfo.SupportsTools = true      // function calling / tools[1][3]
-				tempModelInfo.SupportsStructured = true // structured outputs supported in newer models[3][4]
-				tempModelInfo.SupportsInputImage = true
-				tempModelInfo.SupportsThinking = false // not in reasoning series[5][1]
-
-				// GPT‑4o family (omni; widely used for chat; text-to-text supported)
-			case "gpt-4o", "gpt-4o-mini":
-				tempModelInfo.Name = model.ID
-				tempModelInfo.ContextSize = 128000 // typical large context for 4o in platform docs[6][3]
-				tempModelInfo.SupportsTools = true // tools/function calling supported[7][3]
-				tempModelInfo.SupportsStructured = true
-				tempModelInfo.SupportsInputImage = true
-				tempModelInfo.SupportsThinking = false // not a reasoning-series model[7][5]
-
-				// Reasoning series (o3 / o3-mini / o4-mini) — used for tougher chat tasks
-			case "o3", "o3-mini":
-				tempModelInfo.Name = model.ID
-				tempModelInfo.ContextSize = 200000      // per o3 model page[8]
-				tempModelInfo.SupportsTools = true      // reasoning models support tools[9][8]
-				tempModelInfo.SupportsStructured = true // reasoning models in 2025 support structured outputs[10][11]
-				tempModelInfo.SupportsThinking = true   // reasoning models (internal deliberate thinking)[12][8]
-
-			case "o4", "o4-mini":
-				tempModelInfo.Name = model.ID
-				tempModelInfo.ContextSize = 200000      // successor small reasoning model; large context typical[13][7]
-				tempModelInfo.SupportsTools = true      // reasoning models support tools[14][13]
-				tempModelInfo.SupportsStructured = true // modern structured output support[14][10]
-				tempModelInfo.SupportsThinking = true   // reasoning-focused model[13][7]
-
-			default:
-				// Ignore deprecated and old very expensive ones, 3.5 series, embeddings, audio/realtime/search/transcribe previews, image-only, nanos
-			}
-
-		default:
-			tempModelInfo.Name = model.ID
+		providerConfig, ok := p.CatalogProvidersModels.Providers[string(p.Kind)]
+		if !ok {
+			return nil, errors.New("provider configuration not found in models.json")
 		}
+		tempModelInfo = providerConfig.Defaults
+		// Apply model-specific overrides from the config
+		if specificOverrides, exists := providerConfig.Models[model.ID]; exists {
+			tempModelInfo = MergeModelInfo(providerConfig.Defaults, specificOverrides)
+			p.l.Debug("model info %s after merge: %#v", model.ID, tempModelInfo)
+			tempModelInfo.Name = model.ID
+		} else {
+			// decide if you wanna keep this model or not
+			// for now by design decision we decide to discard it if not present in the  models.json config
+			// as a way to filter models that should not be use because too old, or just not ok for the task
+
+			// and let's say for now that we take all openrouter models
+			if p.Kind == ProviderOpenRouter {
+				tempModelInfo.Name = model.ID
+			}
+		}
+
 		if tempModelInfo.Name != "" {
 			modelInfos = append(modelInfos, tempModelInfo)
 		}

@@ -20,6 +20,8 @@ const (
 	ProviderOllama     ProviderKind = "Ollama"
 )
 
+const defaultModelInfoFilePath = "info/models.json"
+
 type Provider interface {
 	// Query performs a single non-streaming request.
 	Query(ctx context.Context, req *LLMRequest) (*LLMResponse, error)

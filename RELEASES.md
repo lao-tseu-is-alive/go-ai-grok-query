@@ -1,3 +1,14 @@
+### Release 0.2.11 :
+##### Externalized model configuration:
+We now have decoupled model capabilities from source code
+we did externalize all hardcoded model information (context size, feature support, etc.) from the `llm` package into a `models.json` configuration file.
+
+This change significantly improves maintainability and flexibility:
++  Model capabilities can now be updated by editing the JSON file (info/models.json), without needing to recompile the application.
++ The new configuration system uses provider-level defaults and model-specific overrides to reduce duplication.
++ A JSON schema is included to validate the configuration file.
++ the file path of the json config file can be overriden by env variable PROVIDER_INFO_FILEPATH
+
 ### Release 0.2.10 :
 + added GetModelsList to simplify tools code and model verification
 

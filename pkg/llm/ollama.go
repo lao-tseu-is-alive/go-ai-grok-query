@@ -13,16 +13,18 @@ import (
 	"time"
 
 	"github.com/google/uuid" // Add this import for tool ID generation
+	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 // OllamaProvider implements the Provider interface for local Ollama models.
 // It handles tool calls, though Ollama's API lacks tool call IDs (we generate UUIDs to maintain compatibility).
 type OllamaProvider struct {
-	BaseURL string
-	Model   string
-	Client  *http.Client
-	l       golog.MyLogger
+	BaseURL    string
+	Model      string
+	ModelsInfo ProviderModelsInfo
+	Client     *http.Client
+	l          golog.MyLogger
 }
 
 // ollamaRequest represents the request payload for Ollama's chat API.
@@ -79,11 +81,23 @@ func NewOllamaAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("ollama: missing baseURl")
 	}
+	filepath := config.GetProviderInfoFilePathFromEnv(defaultModelInfoFilePath)
+	// Load only once the external model configuration
+	catalog, err := LoadModelCatalog(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load model catalog: %w", err)
+	}
+	providerConfig, ok := catalog.Providers[string(ProviderOllama)]
+	if !ok {
+		return nil, errors.New("ollama provider configuration not found in models.json")
+	}
+
 	return &OllamaProvider{
-		BaseURL: cfg.BaseURL,
-		Model:   cfg.Model,
-		Client:  &http.Client{Timeout: 30 * time.Second}, // Add timeout to prevent hangs
-		l:       l,
+		BaseURL:    cfg.BaseURL,
+		Model:      cfg.Model,
+		ModelsInfo: providerConfig,                          // cache this info for latter use
+		Client:     &http.Client{Timeout: 30 * time.Second}, // Add timeout to prevent hangs
+		l:          l,
 	}, nil
 }
 
@@ -149,113 +163,22 @@ func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		return nil, fmt.Errorf("failed to list ollama models: %w", err)
 	}
 
-	// remove from our list the embedding
-
 	modelInfos := make([]ModelInfo, 0, len(resp.Models))
 	for _, model := range resp.Models {
-		// o.l.Info("ollama model info %s: %#v", model.Name, model)
-		if !strings.Contains(model.Name, "embed") &&
-			!strings.Contains(model.Name, "paraphrase") &&
-			!strings.Contains(model.Name, "all-minilm") {
-			tempModelInfo := ModelInfo{
-				Name:               model.Name,
-				Family:             model.Details.Family,
-				Size:               model.Size,
-				ParameterSize:      model.Details.ParameterSize,
-				ContextSize:        8192, // safe default
-				SupportsTools:      false,
-				SupportsThinking:   false,
-				SupportsInputImage: false,
-				SupportsStreaming:  true,
-				SupportsJSONMode:   false,
-				SupportsStructured: false,
+
+		//o.l.Info("ollama model info %s: %#v", model.Name, model)
+		if !IsModelExcluded(model.Name, o.ModelsInfo.ExcludePatterns) {
+			tempModelInfo := o.ModelsInfo.Defaults
+			// Apply model-specific overrides from the config
+			if specificOverrides, exists := o.ModelsInfo.Models[model.Name]; exists {
+				tempModelInfo = MergeModelInfo(o.ModelsInfo.Defaults, specificOverrides)
+				o.l.Debug("ollama model info %s after merge: %#v", model.Name, tempModelInfo)
 			}
-			// adjust context size and other specifics based on documentation
-			switch model.Name {
-			case "deepcoder:1.5b", "deepcoder:latest":
-				tempModelInfo.ContextSize = 131072
-			case "deepseek-r1:latest", "deepseek-r1:1.5b", "deepseek-r1:7b,", "deepseek-r1:8b", "deepseek-r1:14b", "deepseek-r1:32b", "deepseek-r1:70b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsThinking = true
-			case "devstral:latest", "devstral:24b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-			case "dolphin3:latest", "dolphin3:8b":
-				tempModelInfo.ContextSize = 131072
-			case "exaone-deep:latest", "exaone-deep:2.4b", "exaone-deep:7.8b", "exaone-deep:32b":
-				tempModelInfo.ContextSize = 32768
-			case "falcon3:latest", "falcon3:3b", "falcon3:7b", "falcon3:10b":
-				tempModelInfo.ContextSize = 32768
-			case "gemma3:270m", "gemma3:1b":
-				tempModelInfo.ContextSize = 32768
-			case "gemma3:latest", "gemma3:4b", "gemma3:12b", "gemma3:27b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsInputImage = true
-			case "gpt-oss:latest", "gpt-oss:20b", "gpt-oss:120b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsThinking = true
-			case "llama3.1:8b-instruct-q8_0", "llama3.1:latest", "llama3.1:8b", "llama3.1:70b", "llama3.1:405b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-			case "llama3.2:latest", "llama3.2:1b", "llama3.2:3b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-			case "llama3.2-vision:latest", "llama3.2-vision:11b", "llama3.2-vision:90b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsInputImage = true
-			case "llava:latest", "llava:7b":
-				tempModelInfo.ContextSize = 32768
-				tempModelInfo.SupportsInputImage = true
-			case "llava:13b", "llava:34b":
-				tempModelInfo.ContextSize = 4096
-				tempModelInfo.SupportsInputImage = true
-			case "magistral:latest", "magistral:24b":
-				tempModelInfo.ContextSize = 40000
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsThinking = true
-			case "mistral-nemo:latest", "mistral-nemo:12b":
-				tempModelInfo.ContextSize = 1024000
-				tempModelInfo.SupportsTools = true
-			case "mistral-small3.1:latest", "mistral-small3.1:24b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsInputImage = true
-			case "mistral-small3.2:latest", "mistral-small3.2:24b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsInputImage = true
-			case "mistral-small:latest", "mistral-small:24b":
-				tempModelInfo.ContextSize = 32768
-				tempModelInfo.SupportsTools = true
-			case "mistral-small:22b":
-				tempModelInfo.ContextSize = 131072
-				tempModelInfo.SupportsTools = true
-			case "mistral:latest", "mistral:7b":
-				tempModelInfo.ContextSize = 32768
-				tempModelInfo.SupportsTools = true
-			case "mixtral:latest", "mixtral:8x7b":
-				tempModelInfo.ContextSize = 32768
-				tempModelInfo.SupportsTools = true
-			case "mixtral:8x22b":
-				tempModelInfo.ContextSize = 65536
-				tempModelInfo.SupportsTools = true
-			case "openthinker:latest", "openthinker:7b", "openthinker:32b":
-				tempModelInfo.ContextSize = 32768
-			case "phi4:latest", "phi4:14b":
-				tempModelInfo.ContextSize = 16384
-			case "qwen3:latest", "qwen3:0.6b", "qwen3:1.7b", "qwen3:8b", "qwen3:14b", "qwen3:32b":
-				tempModelInfo.ContextSize = 40960
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsThinking = true
-			case "qwen3-coder:latest", "qwen3-coder:30b", "qwen3-coder:480b":
-				tempModelInfo.ContextSize = 262144
-			case "qwen3:4b", "qwen3:30b", "qwen3:235b":
-				tempModelInfo.ContextSize = 262144
-				tempModelInfo.SupportsTools = true
-				tempModelInfo.SupportsThinking = true
-			}
+			tempModelInfo.Name = model.Name
+			tempModelInfo.Family = model.Details.Family
+			tempModelInfo.Size = model.Size
+			tempModelInfo.ParameterSize = model.Details.ParameterSize
+
 			if tempModelInfo.Name != "" {
 				modelInfos = append(modelInfos, tempModelInfo)
 			}
@@ -263,7 +186,6 @@ func (o *OllamaProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			o.l.Debug("ollama model embedding %s discarded: %#v", model.Name, model)
 		}
 	}
-
 	slices.SortStableFunc(modelInfos, func(i, j ModelInfo) int {
 		return cmp.Compare(i.Name, j.Name)
 	})

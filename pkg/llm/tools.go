@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
+	"strings"
 )
 
 // ToOpenAIChatMessages converts internal messages to OpenAI API format.
@@ -69,4 +71,10 @@ func (r ExampleToolRegistry) Execute(name string, args json.RawMessage) (string,
 
 func Clamp(val, min, max float64) float64 {
 	return math.Min(max, math.Max(min, val))
+}
+
+func IsModelExcluded(modelName string, excludePatterns []string) bool {
+	return slices.ContainsFunc(excludePatterns, func(pattern string) bool {
+		return strings.Contains(modelName, pattern)
+	})
 }

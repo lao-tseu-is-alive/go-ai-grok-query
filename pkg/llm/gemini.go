@@ -12,16 +12,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
 )
 
 // GeminiProvider implements the Provider interface for Google's Gemini models.
 type GeminiProvider struct {
-	BaseURL string
-	APIKey  string
-	Model   string
-	Client  *http.Client
-	l       golog.MyLogger
+	BaseURL    string
+	APIKey     string
+	Model      string
+	ModelsInfo ProviderModelsInfo
+	Client     *http.Client
+	l          golog.MyLogger
 }
 
 // geminiRequest represents the request payload for Gemini's generateContent API.
@@ -59,12 +61,23 @@ func NewGeminiAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("gemini: missing baseURl")
 	}
+	filepath := config.GetProviderInfoFilePathFromEnv(defaultModelInfoFilePath)
+	// Load only once the external model configuration
+	catalog, err := LoadModelCatalog(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load model catalog: %w", err)
+	}
+	providerConfig, ok := catalog.Providers[string(ProviderGemini)]
+	if !ok {
+		return nil, errors.New("ollama provider configuration not found in models.json")
+	}
 	return &GeminiProvider{
-		BaseURL: cfg.BaseURL,
-		APIKey:  cfg.APIKey,
-		Model:   cfg.Model,
-		Client:  &http.Client{Timeout: 30 * time.Second},
-		l:       l,
+		BaseURL:    cfg.BaseURL,
+		APIKey:     cfg.APIKey,
+		Model:      cfg.Model,
+		ModelsInfo: providerConfig,
+		Client:     &http.Client{Timeout: 30 * time.Second},
+		l:          l,
 	}, nil
 }
 
@@ -168,10 +181,29 @@ func (g *GeminiProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list gemini models: %w", err)
 	}
+	modelInfos := make([]ModelInfo, 0, len(resp.Models))
+	for _, model := range resp.Models {
+		if !IsModelExcluded(model.Name, g.ModelsInfo.ExcludePatterns) {
+			tempModelInfo := g.ModelsInfo.Defaults
+			// Apply model-specific overrides from the config
+			if specificOverrides, exists := g.ModelsInfo.Models[model.Name]; exists {
+				tempModelInfo = MergeModelInfo(g.ModelsInfo.Defaults, specificOverrides)
+				g.l.Debug("ollama model info %s after merge: %#v", model.Name, tempModelInfo)
+				tempModelInfo.Name = model.Name
+			} else {
+				// decide if you wanna keep model that is not on your config or not
+				// for now by design decision we decide to discard it if not present in the  models.json config
+				// as a way to filter models that should not be use because too old, or just not ok for the task
+				// MAYBE LATER CAN BE OVERRIDDEN BY FLAG
 
-	modelInfos := make([]ModelInfo, len(resp.Models))
-	for i, model := range resp.Models {
-		modelInfos[i] = ModelInfo{Name: model.Name}
+			}
+
+			if tempModelInfo.Name != "" {
+				modelInfos = append(modelInfos, tempModelInfo)
+			}
+		} else {
+			g.l.Debug("gemini model %s discarded: %#v", model.Name, model)
+		}
 	}
 
 	return modelInfos, nil
