@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -77,4 +78,27 @@ func IsModelExcluded(modelName string, excludePatterns []string) bool {
 	return slices.ContainsFunc(excludePatterns, func(pattern string) bool {
 		return strings.Contains(modelName, pattern)
 	})
+}
+
+func StreamQuery(ctx context.Context, provider Provider, req *LLMRequest) (<-chan Delta, error) {
+
+	deltaChan := make(chan Delta)
+
+	// The onDelta callback now sends to the channel
+	onDelta := func(delta Delta) {
+		deltaChan <- delta
+	}
+
+	// Run the provider's stream method in a goroutine
+	go func() {
+		defer close(deltaChan) // Close the channel when the stream is done
+		_, err := provider.Stream(ctx, req, onDelta)
+		if err != nil {
+			// How to handle errors is a key design decision here.
+			// You could send an error type over the channel, for example.
+			fmt.Printf("Error during stream: %v\n", err)
+		}
+	}()
+
+	return deltaChan, nil
 }

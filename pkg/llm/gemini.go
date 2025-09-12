@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/lao-tseu-is-alive/go-ai-llm-query/pkg/config"
 	"github.com/lao-tseu-is-alive/go-cloud-k8s-common/pkg/golog"
@@ -76,7 +75,7 @@ func NewGeminiAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 		APIKey:     cfg.APIKey,
 		Model:      cfg.Model,
 		ModelsInfo: providerConfig,
-		Client:     &http.Client{Timeout: 30 * time.Second},
+		Client:     &http.Client{},
 		l:          l,
 	}, nil
 }
@@ -183,13 +182,14 @@ func (g *GeminiProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 	modelInfos := make([]ModelInfo, 0, len(resp.Models))
 	for _, model := range resp.Models {
-		if !IsModelExcluded(model.Name, g.ModelsInfo.ExcludePatterns) {
+		modelName := strings.TrimPrefix(model.Name, "models/")
+		if !IsModelExcluded(modelName, g.ModelsInfo.ExcludePatterns) {
 			tempModelInfo := g.ModelsInfo.Defaults
 			// Apply model-specific overrides from the config
-			if specificOverrides, exists := g.ModelsInfo.Models[model.Name]; exists {
+			if specificOverrides, exists := g.ModelsInfo.Models[modelName]; exists {
 				tempModelInfo = MergeModelInfo(g.ModelsInfo.Defaults, specificOverrides)
-				g.l.Debug("ollama model info %s after merge: %#v", model.Name, tempModelInfo)
-				tempModelInfo.Name = model.Name
+				g.l.Debug("ollama model info %s after merge: %#v", modelName, tempModelInfo)
+				tempModelInfo.Name = modelName
 			} else {
 				// decide if you wanna keep model that is not on your config or not
 				// for now by design decision we decide to discard it if not present in the  models.json config
@@ -202,7 +202,7 @@ func (g *GeminiProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 				modelInfos = append(modelInfos, tempModelInfo)
 			}
 		} else {
-			g.l.Debug("gemini model %s discarded: %#v", model.Name, model)
+			g.l.Debug("gemini model %s discarded: %#v", modelName, model)
 		}
 	}
 

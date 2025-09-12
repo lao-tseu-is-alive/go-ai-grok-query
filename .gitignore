@@ -36,3 +36,4 @@ go.work.sum
 /info/ollama_models.json
 /info/gemini_models.json
 models_info
+/testing_query.sh

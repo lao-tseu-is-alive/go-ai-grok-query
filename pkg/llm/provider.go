@@ -22,6 +22,8 @@ const (
 
 const defaultModelInfoFilePath = "info/models.json"
 
+// Provider defines the interface for interacting with a Large Language Model.
+// It supports both standard and streaming queries.
 type Provider interface {
 	// Query performs a single non-streaming request.
 	Query(ctx context.Context, req *LLMRequest) (*LLMResponse, error)
@@ -42,7 +44,7 @@ type ProviderConfig struct {
 	Extras map[string]any
 }
 
-// NewProvider creates a new provider based on kind.
+// NewProvider creates a new provider based on a given ProviderKind
 // Validates config and applies defaults.
 func NewProvider(kind ProviderKind, model string, l golog.MyLogger) (Provider, error) {
 	if kind == "" {

@@ -22,7 +22,7 @@ const (
 	APP                = "basicQuery"
 	defaultRole        = "You are a helpful bash shell assistant.Your output should be concise, efficient and easy to read in a bash Linux console."
 	defaultTemperature = 0.2
-	defaultTimeout     = 120 * time.Second
+	defaultTimeout     = 120
 )
 
 type argumentsToBasicQuery struct {
@@ -32,6 +32,7 @@ type argumentsToBasicQuery struct {
 	UserPrompt   string
 	Temperature  float64
 	Streaming    bool
+	Timeout      int
 }
 
 // usage provides a more detailed help message for the CLI tool.
@@ -45,7 +46,8 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "  -prompt\tThe prompt to send to the LLM. Required for querying.\n")
 	fmt.Fprintf(os.Stderr, "  -system\tThe system role for the assistant.\n")
 	fmt.Fprintf(os.Stderr, "  -temperature\tThe temperature of the model. Increasing the temperature will make the model answer more creatively(value range 0.0 - 2.0).\n")
-	fmt.Fprintf(os.Stderr, "  -stream\tEnable streaming the response.\n") // Add this line
+	fmt.Fprintf(os.Stderr, "  -stream\tEnable streaming the response.\n")
+	fmt.Fprintf(os.Stderr, "  -timeout\tTimeout for the LLM request in seconds (default: %d).\n", defaultTimeout)
 	fmt.Fprintln(os.Stderr, "\nOptions for listing models:")
 	fmt.Fprintf(os.Stderr, "  -list-models\tLists available models for the specified provider and exits.\n")
 	fmt.Fprintf(os.Stderr, "  -json-output\tUse with -list-models to output in JSON format.\n\n")
@@ -62,7 +64,7 @@ func main() {
 		log.Fatalf("💥💥 error creating logger: %v\n", err)
 	}
 
-	// 1. Update flag definitions and set custom usage function
+	// Flag definitions and set custom usage function
 	flag.Usage = usage
 	providerFlag := flag.String("provider", "", "Provider to use (ollama, gemini, xai, openai, openrouter)")
 	modelFlag := flag.String("model", "", "Model to use, depends on chosen provider, leave blank for a default valid choice")
@@ -72,9 +74,10 @@ func main() {
 	jsonOutputFlag := flag.Bool("json-output", false, "Use with -list-models for JSON output")
 	temperatureFlag := flag.Float64("temperature", defaultTemperature, fmt.Sprintf("The temperature for the LLM response (0.0 - 2.0) default value is : %f", defaultTemperature))
 	streamFlag := flag.Bool("stream", false, "Enable streaming the response")
+	timeoutFlag := flag.Int("timeout", defaultTimeout, fmt.Sprintf("Timeout for the LLM request in seconds (default: %d)", defaultTimeout))
 	flag.Parse()
 
-	// 2. Make the -provider flag mandatory
+	// Make the -provider flag mandatory
 	if *providerFlag == "" {
 		l.Error("💥💥 Error: -provider flag is required.")
 		flag.Usage()
@@ -96,9 +99,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 3. Handle the -list-models functionality
+	// Handle the -list-models functionality
 	if *listModelsFlag {
-		if err := handleListModels(l, provider, *jsonOutputFlag); err != nil {
+		if err := handleListModels(l, provider, *jsonOutputFlag, *timeoutFlag); err != nil {
 			l.Error("💥💥 Could not list models: %v", err)
 			os.Exit(1)
 		}
@@ -120,6 +123,7 @@ func main() {
 		UserPrompt:   *userPromptFlag,
 		Temperature:  *temperatureFlag,
 		Streaming:    *streamFlag,
+		Timeout:      *timeoutFlag,
 	}
 
 	if err := run(l, params, os.Stdout); err != nil {
@@ -129,9 +133,9 @@ func main() {
 }
 
 // handleListModels fetches and displays the models from a provider.
-func handleListModels(l golog.MyLogger, provider llm.Provider, jsonOutput bool) error {
+func handleListModels(l golog.MyLogger, provider llm.Provider, jsonOutput bool, timeout int) error {
 	l.Info("Fetching available models...")
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	models, err := provider.ListModels(ctx)
@@ -180,8 +184,9 @@ func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
 	}
 
 	// 4. Add model validation logic before querying
+	timeoutForListing := time.Duration(params.Timeout) * time.Second
 	l.Info("Validating model '%s' with provider...", modelToUse)
-	modelsList, err := llm.GetModelsList(l, provider, defaultTimeout)
+	modelsList, err := llm.GetModelsList(l, provider, timeoutForListing)
 	if err != nil {
 		return fmt.Errorf("error getting list of models for provider %s. err: %w", params.Provider, err)
 	}
@@ -200,22 +205,22 @@ func run(l golog.MyLogger, params argumentsToBasicQuery, out io.Writer) error {
 		Temperature: temperature,
 		Stream:      params.Streaming,
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	timeoutDuration := time.Duration(params.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration)
 	defer cancel()
 
 	if params.Streaming {
 		l.Info("Sending prompt to %s LLM (streaming)...\n", params.Provider)
 		fmt.Fprintln(out, "\nLLM Response (Streaming):")
-
-		// onDelta callback prints text chunks as they arrive
-		onDelta := func(delta llm.Delta) {
-			fmt.Fprint(out, delta.Text)
-		}
-
-		_, err := provider.Stream(ctx, req, onDelta)
+		// Call the decoupled StreamQuery function to get a channel of deltas.
+		deltaChan, err := llm.StreamQuery(ctx, provider, req)
 		if err != nil {
-			return fmt.Errorf("error querying LLM via stream: %w", err)
+			return fmt.Errorf("error starting LLM stream: %w", err)
+		}
+		// Range over the channel to process each delta as it arrives.
+		// This loop will automatically end when the channel is closed by StreamQuery.
+		for delta := range deltaChan {
+			fmt.Fprint(out, delta.Text)
 		}
 		fmt.Fprintln(out) // Add a final newline for clean output
 	} else {

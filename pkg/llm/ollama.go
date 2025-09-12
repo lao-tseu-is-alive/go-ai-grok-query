@@ -95,8 +95,8 @@ func NewOllamaAdapter(cfg ProviderConfig, l golog.MyLogger) (Provider, error) {
 	return &OllamaProvider{
 		BaseURL:    cfg.BaseURL,
 		Model:      cfg.Model,
-		ModelsInfo: providerConfig,                          // cache this info for latter use
-		Client:     &http.Client{Timeout: 30 * time.Second}, // Add timeout to prevent hangs
+		ModelsInfo: providerConfig, // cache this info for latter use
+		Client:     &http.Client{}, // let's use the outer context timeout
 		l:          l,
 	}, nil
 }

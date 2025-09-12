@@ -1,3 +1,22 @@
+### Release 0.2.12 :
+##### Improved streaming with channels and unified timeouts
+overhauls the streaming implementation and timeout handling
+to make the library more robust, reusable, and configurable.
+
+Streaming Refactor:
+- A new `llm.StreamQuery` function has been introduced. It uses a
+  goroutine and a channel to provide a decoupled, idiomatic way for
+  callers to consume stream deltas.
+- The `basicQuery` CLI has been updated to use this new function,
+  cleanly separating the stream consumption logic (ranging over the
+  channel) from the stream execution logic in the library.
+
+Timeout Handling:
+- A `-timeout` flag was added to `basicQuery`, allowing users to
+  specify a custom duration for long-running requests.
+- The hardcoded 30-second `http.Client` timeouts in the Ollama and
+  Gemini providers have been removed. This resolves conflicts and
+  makes the request context the single source of truth for deadlines.
 ### Release 0.2.11 :
 ##### Externalized model configuration:
 We now have decoupled model capabilities from source code
